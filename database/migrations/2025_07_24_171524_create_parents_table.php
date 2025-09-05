@@ -11,11 +11,11 @@ return new class extends Migration
         Schema::create('parents', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->constrained('users')->onDelete('cascade');
-            $table->string('profession')->nullable();
-            $table->string('telephone_travail')->nullable();
+            $table->string('telephone');
             $table->string('adresse');
-            $table->string('telephone_urgence')->nullable();
-            $table->string('personne_contact_urgence')->nullable();
+            $table->string('profession')->nullable();
+            $table->string('contact_urgence_nom')->nullable();
+            $table->string('contact_urgence_telephone')->nullable();
             $table->timestamps();
         });
     }

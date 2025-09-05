@@ -9,8 +9,10 @@ class Activite extends Model
 {
     use HasFactory;
 
-    protected $table = 'activite'; // Nom explicite, non pluriel
-
+    // ⚠️ Garde ceci uniquement si ta table s’appelle vraiment "activite"
+    // (si ta table est "activites", supprime cette ligne)
+    protected $table = 'activite';
+    public const TYPES = ['sport', 'musique', 'theatre', 'artistique'];
     protected $fillable = [
         'nom',
         'description',
@@ -18,32 +20,71 @@ class Activite extends Model
         'date_activite',
         'heure_debut',
         'heure_fin',
-        'prix', 
+        'prix',
+        'image'
     ];
 
     protected $casts = [
         'date_activite' => 'date',
-        'heure_debut' => 'datetime:H:i',
-        'heure_fin' => 'datetime:H:i',
+        'prix'          => 'float',
     ];
 
-    // === Relations ===
+    // Pour exposer directement ces compteurs en JSON (optional)
+    protected $appends = [
+        'nombre_participants',
+        'nombre_presents',
+        'image_url'
+    ];
+    public function getImageUrlAttribute() {
+        return $this->image ? asset('storage/'.$this->image) : null;
+    }
+    
 
-    /**
-     * Les éducateurs responsables de cette activité (Many-to-Many)
-     */
+    /* ===================== Relations ===================== */
+
+    // Many-to-many avec Educateur via pivot "educateur_activite"
     public function educateurs()
     {
-        return $this->belongsToMany(Educateur::class, 'activite_educateur')
+        return $this->belongsToMany(Educateur::class, 'educateur_activite', 'activite_id', 'educateur_id')
                     ->withTimestamps();
     }
 
-    /**
-     * Les enfants qui participent à cette activité (Many-to-Many)
-     */
+    // Many-to-many avec Enfant via pivot "participation_activite"
+    // + colonnes pivot supplémentaires
     public function enfants()
     {
-        return $this->belongsToMany(Enfant::class, 'activite_enfant')
+        return $this->belongsToMany(Enfant::class, 'participation_activite', 'activite_id', 'enfant_id')
+                    ->withPivot('statut_participation', 'remarques', 'note_evaluation')
                     ->withTimestamps();
+    }
+
+    // Si tu as un modèle pour la table pivot (ex: ParticipationActivite)
+    public function participationsActivite()
+    {
+        return $this->hasMany(ParticipationActivite::class, 'activite_id');
+    }
+
+    /* ================== Helpers / Scopes ================= */
+
+    public function enfantsInscrits()
+    {
+        return $this->enfants()->wherePivot('statut_participation', 'inscrit');
+    }
+
+    public function enfantsPresents()
+    {
+        return $this->enfants()->wherePivot('statut_participation', 'present');
+    }
+
+    /* ============== Attributs calculés (accessors) ============== */
+
+    public function getNombreParticipantsAttribute(): int
+    {
+        return $this->enfants()->count();
+    }
+
+    public function getNombrePresentsAttribute(): int
+    {
+        return $this->enfants()->wherePivot('statut_participation', 'present')->count();
     }
 }

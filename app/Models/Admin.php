@@ -3,14 +3,15 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Database\Eloquent\Model;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Laravel\Sanctum\HasApiTokens;
+use App\Traits\HasNotifications;
 
-class Admin extends Model
+class Admin extends Authenticatable
 {
-    use HasFactory;
-
-    // Nom de la table au pluriel comme défini dans la migration
+    use HasApiTokens, HasFactory, HasNotifications;
     protected $table = 'admins';
+
 
     // Champs autorisés pour l'insertion ou la mise à jour
     protected $fillable = [

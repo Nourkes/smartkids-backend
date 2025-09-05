@@ -6,10 +6,11 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-
+use Laravel\Sanctum\HasApiTokens;
+use Spatie\Permission\Traits\HasRoles;
 class User extends Authenticatable
 {
-    use HasFactory, Notifiable;
+    use HasFactory, Notifiable, HasApiTokens,HasRoles;
 
     protected $fillable = [
         'name',
@@ -62,4 +63,23 @@ class User extends Authenticatable
     {
         return $this->role === 'parent';
     }
+
+    // Récupérer le profil spécifique selon le rôle
+    public function getProfil()
+    {
+        switch ($this->role) {
+            case 'admin':
+                return $this->admin;
+            case 'educateur':
+                return $this->educateur;
+            case 'parent':
+                return $this->parent;
+            default:
+                return null;
+        }
+    }
+    public function getNomCompletAttribute()
+{
+    return $this->name; // ou une autre logique
+}
 }

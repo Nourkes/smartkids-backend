@@ -4,12 +4,14 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Traits\HasNotifications;
 
 class ParentModel extends Model
 {
     use HasFactory;
-
-    protected $table = 'parent'; // Nom personnalisé car pas au pluriel
+    use HasNotifications;
+    
+    protected $table = 'parents'; // Nom personnalisé car pas au pluriel
 
     protected $fillable = [
         'user_id',
@@ -30,5 +32,12 @@ class ParentModel extends Model
     public function enfants()
     {
         return $this->belongsToMany(Enfant::class, 'enfant_parent', 'parent_id', 'enfant_id')->withTimestamps();
-    }
+    }
+    // Dans app/Models/ParentModel.php - ajouter cette méthode
+
+    public function paiements()
+    {
+        return $this->hasMany(Paiement::class);
+    }
+    
 }

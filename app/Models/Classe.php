@@ -19,8 +19,22 @@ class Classe extends Model
     ];
 
     // Relation many-to-many avec Educateur
-    public function educateurs()
+// Relation many-to-many avec Educateur
+public function educateurs()
+{
+    return $this->belongsToMany(Educateur::class, 'educateur_classe', 'classe_id', 'educateur_id')->withTimestamps();
+}
+    // Relation : une classe a plusieurs enfants
+    public function enfants()
     {
-        return $this->belongsToMany(Educateur::class, 'educateur_classe', 'classe_id', 'educateur_id')->withTimestamps();
-    }
+        return $this->hasMany(Enfant::class);
+    }
+// Dans app/Models/Classe.php - ajouter cette méthode
+
+public function matieres()
+{
+    return $this->belongsToMany(Matiere::class, 'classe_matiere')
+                ->withPivot('heures_par_semaine', 'objectifs_specifiques')
+                ->withTimestamps();
+}
 }

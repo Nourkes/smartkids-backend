@@ -4,11 +4,11 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-
+use App\Traits\HasNotifications;
 class Educateur extends Model
 {
     use HasFactory;
-
+    use HasNotifications;
     protected $table = 'educateurs';
 
     protected $fillable = [
@@ -56,4 +56,10 @@ class Educateur extends Model
     {
         return $this->hasMany(Presence::class);
     }
+    // Dans app/Models/Educateur.php - ajouter cette méthode
+
+public function notesAttribuees()
+{
+    return $this->hasMany(SuivieNote::class);
+}
 }
