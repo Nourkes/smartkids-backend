@@ -1,0 +1,31 @@
+<?php
+
+namespace App\Http\Requests;
+
+use Illuminate\Foundation\Http\FormRequest;
+
+class AssignEducateurToClasseRequest extends FormRequest
+{
+    public function authorize(): bool
+    {
+        return auth()->user() && auth()->user()->isAdmin();
+    }
+
+    public function rules(): array
+    {
+        return [
+            'educateur_id' => 'required|integer|exists:educateurs,id',
+            'classe_id' => 'required|integer|exists:classe,id'
+        ];
+    }
+
+    public function messages(): array
+    {
+        return [
+            'educateur_id.required' => 'L\'ID de l\'éducateur est obligatoire.',
+            'educateur_id.exists' => 'Cet éducateur n\'existe pas.',
+            'classe_id.required' => 'L\'ID de la classe est obligatoire.',
+            'classe_id.exists' => 'Cette classe n\'existe pas.'
+        ];
+    }
+}

@@ -1,0 +1,33 @@
+<?php
+
+namespace App\Http\Requests;
+
+use Illuminate\Foundation\Http\FormRequest;
+
+class UpdateEducateurProfileRequest extends FormRequest
+{
+    public function authorize()
+    {
+        return true; // L'autorisation est gérée par le middleware
+    }
+
+    public function rules()
+    {
+        $userId = auth()->user()->id;
+        
+        return [
+            'name' => 'sometimes|required|string|max:255',
+            'email' => 'sometimes|required|email|unique:users,email,' . $userId,
+            'password' => 'sometimes|nullable|min:8',
+            'current_password' => 'required_with:password|current_password',
+        ];
+    }
+
+    public function messages()
+    {
+        return [
+            'current_password.current_password' => 'Le mot de passe actuel est incorrect',
+            'current_password.required_with' => 'Le mot de passe actuel est requis pour changer le mot de passe',
+        ];
+    }
+}

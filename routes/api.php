@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\Admin\MenuController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Auth\RoleController;
 use App\Http\Controllers\Admin\ParentController;
@@ -17,6 +18,7 @@ Route::prefix('auth')->group(function () {
     Route::post('/login',    [AuthController::class, 'login']);
 });
 Route::get('/activites/types', [ActiviteController::class, 'typesPublic']);
+Route::get('/admin/educateurs/{id}', [EducateurController::class, 'show']);
 // ──────────────── ROUTES PROTÉGÉES ────────────────
 Route::middleware('auth:sanctum')->group(function () {
 
@@ -33,7 +35,30 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::get('activites/types', [ActiviteController::class, 'types'])
             ->name('admin.activites.types');
         Route::get('/activites/stats', [ActiviteController::class, 'stats']);
-        
+        Route::get('/menus',        [MenuController::class, 'index'])->name('menus.index');
+    Route::get('/menus/{menu}', [MenuController::class, 'show'])->name('menus.show');
+  
+    // --- Gestion (admin) ---
+    Route::middleware(['role:admin'])->group(function () {
+        // CRUD
+        Route::post  ('/menus',        [MenuController::class, 'store'])->name('menus.store');
+        Route::put   ('/menus/{menu}', [MenuController::class, 'update'])->name('menus.update');
+        Route::patch ('/menus/{menu}', [MenuController::class, 'update'])->name('menus.patch');
+        Route::delete('/menus/{menu}', [MenuController::class, 'destroy'])->name('menus.destroy');
+        Route::post('menus/day', [\App\Http\Controllers\MenuController::class, 'storeDailyMenu']);
+        // Menus hebdomadaires
+        Route::post('/menus/weekly',            [MenuController::class, 'createWeeklyMenu'])->name('menus.weekly.create');
+    });
+
+    // Endpoints hebdo accessibles en lecture (authentifié)
+    Route::get('/menus/weekly/current', [MenuController::class, 'getCurrentWeekMenu'])->name('menus.weekly.current');
+    Route::get('/menus/weekly/by-date', [MenuController::class, 'getWeekMenu'])->name('menus.weekly.byDate');
+
+    // Duplication hebdo (admin)
+    Route::middleware(['role:admin'])->post(
+        '/menus/weekly/duplicate',
+        [MenuController::class, 'duplicateWeeklyMenu']
+    )->name('menus.weekly.duplicate');
         // CRUD des activités
         Route::apiResource('activites', ActiviteController::class);
         
@@ -67,18 +92,45 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // ─── CLASSES (NEW) ───
         Route::get('/classes/stats', [ClasseController::class, 'stats']); // Doit être avant la route resource
-        Route::apiResource('classes', ClasseController::class);
-        // Cela génère automatiquement :
-        // GET    /api/admin/classes          -> index()
-        // POST   /api/admin/classes          -> store()
-        // GET    /api/admin/classes/{classe} -> show()
-        // PUT    /api/admin/classes/{classe} -> update()
-        // PATCH  /api/admin/classes/{classe} -> update()
-        // DELETE /api/admin/classes/{classe} -> destroy()
+        
+        Route::prefix('classes')->group(function () {
+            Route::get('/', [ClasseController::class, 'index']); // GET /api/admin/classes - Liste paginée avec filtres
+            Route::post('/', [ClasseController::class, 'store']); // POST /api/admin/classes - Créer une classe
+            Route::get('/{id}', [ClasseController::class, 'show']); // GET /api/admin/classes/{id} - Détails d'une classe
+            Route::put('/{id}', [ClasseController::class, 'update']); // PUT /api/admin/classes/{id} - Modifier une classe
+            Route::delete('/{id}', [ClasseController::class, 'destroy']); // DELETE /api/admin/classes/{id} - Supprimer une classe
+            
+            // CORRECTION: Routes spécialisées AVANT les routes avec paramètres pour éviter les conflits
+            Route::get('/list/simple', [ClasseController::class, 'list']); // Liste simple pour sélecteurs
+            Route::get('/statistics/all', [ClasseController::class, 'statistics']); // Statistiques complètes
+            Route::get('/with/educateurs', [ClasseController::class, 'withEducateurs']); // Classes avec éducateurs
+            Route::post('/search', [ClasseController::class, 'search']); // Recherche avancée
+            Route::post('/check-nom', [ClasseController::class, 'checkNomDisponibilite']); // Vérification nom
+            Route::get('/niveaux/disponibles', [ClasseController::class, 'niveauxDisponibles']); // Niveaux disponibles
+            Route::get('/disponibles/affectation', [ClasseController::class, 'disponiblesAffectation']); // Classes disponibles
+            Route::get('/export/data', [ClasseController::class, 'export']); // Export des données
+            Route::get('/niveau/{niveau}', [ClasseController::class, 'classesByNiveau']); // Classes par niveau
+            Route::post('/{id}/duplicate', [ClasseController::class, 'duplicate']); // Duplication
+            Route::get('/{id}/rapport', [ClasseController::class, 'rapport']); // Rapport détaillé
+            Route::post('/{id}/archiver', [ClasseController::class, 'archiver']); // Archiver une classe
+            Route::get('/{id}/can-delete', [ClasseController::class, 'canDelete']); // Vérifier possibilité suppression
+        });
+        Route::prefix('affectations')->group(function () {
+            Route::post('/assign', [ClasseEducateurController::class, 'assignEducateur']);
+            Route::delete('/remove', [ClasseEducateurController::class, 'removeEducateur']);
+            Route::put('/change', [ClasseEducateurController::class, 'changeEducateur']);
+            Route::post('/assign-multiple', [ClasseEducateurController::class, 'assignMultipleEducateurs']);
+            Route::get('/resume', [ClasseEducateurController::class, 'getAffectationsResume']);
+            Route::get('/classe/{classe}/educateurs-disponibles', [ClasseEducateurController::class, 'getAvailableEducateurs']);
+        });
         Route::get('/educateurs/stats', [EducateurController::class, 'stats']); // Doit être avant la route resource
         Route::post('/educateurs/{educateur}/assign-classes', [EducateurController::class, 'assignClasses']);
-        Route::apiResource('educateurs', EducateurController::class);
-
+        Route::prefix('educateurs')->group(function () {
+            Route::get('/', [EducateurController::class, 'index']); // Liste des éducateurs
+            Route::post('/', [EducateurController::class, 'store']); // Créer un éducateur
+            Route::put('/{educateur}', [EducateurController::class, 'update']); // Modifier un éducateur
+            Route::delete('/{educateur}', [EducateurController::class, 'destroy']); // Supprimer un éducateur
+        });
         // Dashboard (optionnel)
         Route::get('/dashboard', fn () => response()->json(['message' => 'Dashboard Admin']));
     });
