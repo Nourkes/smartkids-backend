@@ -1,311 +1,220 @@
 <?php
 
-namespace App\Http\Controllers;
+
+namespace App\Http\Controllers\Parent;
 
 use App\Http\Controllers\Controller;
 use App\Models\Presence;
 use App\Models\Enfant;
-use App\Models\Classe;
-use App\Models\Educateur;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\Validator;
 
 class PresenceController extends Controller
 {
     /**
-     * Marquer la présence pour une classe (Éducateur)
+     * GET /api/parent/enfants
+     * Récupérer les enfants du parent connecté
      */
-    public function marquerPresenceClasse(Request $request)
+    public function getEnfantsParent(): JsonResponse
     {
-        $request->validate([
-            'classe_id' => 'required|exists:classe,id',
-            'date_presence' => 'required|date',
-            'presences' => 'required|array',
-            'presences.*.enfant_id' => 'required|exists:enfant,id',
-            'presences.*.statut' => 'required|in:present,absent,retard,excuse'
-        ]);
+        try {
+            $user = Auth::user();
+            $parent = $user->parent; // Assuming User hasOne Parent relationship
+            
+            if (!$parent) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Profil parent non trouvé'
+                ], 404);
+            }
 
-        $educateur = Auth::user()->educateur;
-        if (!$educateur) {
-            return response()->json(['error' => 'Utilisateur non autorisé'], 403);
+            $enfants = $parent->enfants()
+                ->with(['classe:id,nom,niveau'])
+                ->select('id', 'nom', 'prenom', 'classe_id', 'date_naissance')
+                ->orderBy('nom')
+                ->get()
+                ->map(function($enfant) {
+                    return [
+                        'id' => $enfant->id,
+                        'nom' => $enfant->nom,
+                        'prenom' => $enfant->prenom,
+                        'nom_complet' => "{$enfant->prenom} {$enfant->nom}",
+                        'age' => now()->diffInYears($enfant->date_naissance),
+                        'classe' => $enfant->classe ? [
+                            'id' => $enfant->classe->id,
+                            'nom' => $enfant->classe->nom,
+                            'niveau' => $enfant->classe->niveau
+                        ] : null
+                    ];
+                });
+
+            return response()->json([
+                'success' => true,
+                'data' => $enfants
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors de la récupération des enfants'
+            ], 500);
         }
+    }
 
-        // Vérifier que l'éducateur a accès à cette classe
-        if (!$educateur->classes()->where('classe.id', $request->classe_id)->exists()) {
-            return response()->json(['error' => 'Accès non autorisé à cette classe'], 403);
-        }
+    /**
+     * GET /api/parent/enfants/{enfantId}/presences
+     * Consulter les présences d'un enfant
+     */
+    public function getPresencesEnfant(Request $request, $enfantId): JsonResponse
+    {
+        try {
+            $user = Auth::user();
+            $parent = $user->parent;
+            
+            // Vérifier que l'enfant appartient au parent
+            $enfant = $parent->enfants()->with('classe')->findOrFail($enfantId);
+            
+            $dateDebut = $request->get('date_debut', now()->subDays(30)->format('Y-m-d'));
+            $dateFin = $request->get('date_fin', now()->format('Y-m-d'));
+            $perPage = $request->get('per_page', 15);
 
-        $presencesEnregistrees = [];
-        $date = Carbon::parse($request->date_presence)->format('Y-m-d');
+            $presences = Presence::where('enfant_id', $enfantId)
+                ->whereBetween('date_presence', [$dateDebut, $dateFin])
+                ->with(['educateur.user:id,name'])
+                ->orderBy('date_presence', 'desc')
+                ->paginate($perPage);
 
-        foreach ($request->presences as $presenceData) {
-            // Vérifier ou créer la présence
-            $presence = Presence::updateOrCreate(
-                [
-                    'enfant_id' => $presenceData['enfant_id'],
-                    'date_presence' => $date,
+            // Calculer les statistiques
+            $totalJours = $presences->total();
+            $joursPresents = Presence::where('enfant_id', $enfantId)
+                ->whereBetween('date_presence', [$dateDebut, $dateFin])
+                ->where('statut', 'present')
+                ->count();
+            $joursAbsents = $totalJours - $joursPresents;
+            $tauxPresence = $totalJours > 0 ? round(($joursPresents / $totalJours) * 100, 1) : 0;
+
+            $presencesFormatted = $presences->getCollection()->map(function($presence) {
+                return [
+                    'id' => $presence->id,
+                    'date' => $presence->date_presence->format('Y-m-d'),
+                    'date_libelle' => $presence->date_presence->locale('fr')->isoFormat('dddd DD MMMM YYYY'),
+                    'statut' => $presence->statut,
+                    'educateur_nom' => $presence->educateur->user->name,
+                    'updated_at' => $presence->updated_at->format('H:i')
+                ];
+            });
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'enfant' => [
+                        'id' => $enfant->id,
+                        'nom_complet' => "{$enfant->prenom} {$enfant->nom}",
+                        'classe' => $enfant->classe ? [
+                            'nom' => $enfant->classe->nom,
+                            'niveau' => $enfant->classe->niveau
+                        ] : null
+                    ],
+                    'presences' => $presencesFormatted,
+                    'statistiques' => [
+                        'total_jours' => $totalJours,
+                        'jours_presents' => $joursPresents,
+                        'jours_absents' => $joursAbsents,
+                        'taux_presence' => $tauxPresence
+                    ],
+                    'periode' => [
+                        'debut' => $dateDebut,
+                        'fin' => $dateFin
+                    ]
                 ],
-                [
-                    'educateur_id' => $educateur->id,
-                    'statut' => $presenceData['statut'],
+                'pagination' => [
+                    'current_page' => $presences->currentPage(),
+                    'last_page' => $presences->lastPage(),
+                    'per_page' => $presences->perPage(),
+                    'total' => $presences->total()
                 ]
-            );
+            ]);
 
-            $presencesEnregistrees[] = $presence->load('enfant');
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors de la récupération des présences'
+            ], 500);
         }
-
-        return response()->json([
-            'message' => 'Présences enregistrées avec succès',
-            'presences' => $presencesEnregistrees
-        ], 200);
     }
 
     /**
-     * Obtenir les enfants d'une classe avec leur statut de présence pour une date
+     * GET /api/parent/enfants/{enfantId}/presences/calendrier
+     * Calendrier des présences de l'enfant
      */
-    public function getEnfantsClasse(Request $request, $classeId)
+    public function getCalendrierEnfant(Request $request, $enfantId): JsonResponse
     {
-        $request->validate([
-            'date' => 'required|date'
-        ]);
+        try {
+            $user = Auth::user();
+            $parent = $user->parent;
+            
+            // Vérifier que l'enfant appartient au parent
+            $enfant = $parent->enfants()->findOrFail($enfantId);
+            
+            $mois = $request->get('mois', now()->format('Y-m'));
+            $dateDebut = Carbon::parse($mois . '-01')->startOfMonth();
+            $dateFin = $dateDebut->copy()->endOfMonth();
 
-        $educateur = Auth::user()->educateur;
-        if (!$educateur) {
-            return response()->json(['error' => 'Utilisateur non autorisé'], 403);
+            $presences = Presence::where('enfant_id', $enfantId)
+                ->whereBetween('date_presence', [$dateDebut, $dateFin])
+                ->get()
+                ->keyBy(function($presence) {
+                    return $presence->date_presence->format('Y-m-d');
+                });
+
+            // Générer le calendrier du mois
+            $calendrier = [];
+            $date = $dateDebut->copy();
+            
+            while ($date->lte($dateFin)) {
+                $dateStr = $date->format('Y-m-d');
+                $presence = $presences->get($dateStr);
+                
+                $calendrier[] = [
+                    'date' => $dateStr,
+                    'jour' => $date->format('d'),
+                    'jour_semaine' => $date->locale('fr')->isoFormat('dddd'),
+                    'est_weekend' => $date->isWeekend(),
+                    'statut' => $presence ? $presence->statut : null,
+                    'a_presence' => (bool) $presence
+                ];
+                
+                $date->addDay();
+            }
+
+            // Statistiques du mois
+            $presencesMois = $presences->whereNotNull('statut');
+            $totalJours = $presencesMois->count();
+            $joursPresents = $presencesMois->where('statut', 'present')->count();
+            $joursAbsents = $totalJours - $joursPresents;
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'mois' => $mois,
+                    'mois_libelle' => $dateDebut->locale('fr')->isoFormat('MMMM YYYY'),
+                    'calendrier' => $calendrier,
+                    'statistiques_mois' => [
+                        'total_jours_ecole' => $totalJours,
+                        'jours_presents' => $joursPresents,
+                        'jours_absents' => $joursAbsents,
+                        'taux_presence' => $totalJours > 0 ? round(($joursPresents / $totalJours) * 100, 1) : 0
+                    ]
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Erreur lors de la génération du calendrier'
+            ], 500);
         }
-
-        // Vérifier l'accès à la classe
-        if (!$educateur->classes()->where('classe.id', $classeId)->exists()) {
-            return response()->json(['error' => 'Accès non autorisé à cette classe'], 403);
-        }
-
-        $classe = Classe::with(['enfants' => function ($query) use ($request) {
-            $query->with(['presences' => function ($subQuery) use ($request) {
-                $subQuery->where('date_presence', Carbon::parse($request->date)->format('Y-m-d'));
-            }]);
-        }])->find($classeId);
-
-        if (!$classe) {
-            return response()->json(['error' => 'Classe non trouvée'], 404);
-        }
-
-        $enfantsAvecPresence = $classe->enfants->map(function ($enfant) {
-            $presenceAujourdhui = $enfant->presences->first();
-            return [
-                'id' => $enfant->id,
-                'nom' => $enfant->nom,
-                'prenom' => $enfant->prenom,
-                'sexe' => $enfant->sexe,
-                'statut_presence' => $presenceAujourdhui ? $presenceAujourdhui->statut : null,
-                'deja_marque' => $presenceAujourdhui ? true : false
-            ];
-        });
-
-        return response()->json([
-            'classe' => [
-                'id' => $classe->id,
-                'nom' => $classe->nom,
-                'niveau' => $classe->niveau
-            ],
-            'enfants' => $enfantsAvecPresence
-        ], 200);
-    }
-
-    /**
-     * Obtenir les classes de l'éducateur connecté
-     */
-    public function getClassesEducateur()
-    {
-        $educateur = Auth::user()->educateur;
-        if (!$educateur) {
-            return response()->json(['error' => 'Utilisateur non autorisé'], 403);
-        }
-
-        $classes = $educateur->classes()->select('classe.id', 'classe.nom', 'classe.niveau')->get();
-
-        return response()->json([
-            'classes' => $classes
-        ], 200);
-    }
-
-    /**
-     * Obtenir le calendrier de présence d'un enfant (Parent)
-     */
-
-
-
-
-public function getCalendrierEnfant(Request $request, $enfantId)
-{
-    // 0) Mois/année par défaut = courants (si non fournis)
-    $mois  = (int) $request->query('mois', now()->month);
-    $annee = (int) $request->query('annee', now()->year);
-
-    // validation soft
-    $v = Validator::make(['mois'=>$mois,'annee'=>$annee], [
-        'mois'  => 'integer|min:1|max:12',
-        'annee' => 'integer|min:2020|max:2030',
-    ]);
-    if ($v->fails()) {
-        return response()->json(['message'=>'Validation error','errors'=>$v->errors()], 422);
-    }
-
-    // 1) Sécu
-    $parent = Auth::user()->parent;
-    if (!$parent) return response()->json(['error'=>'Utilisateur non autorisé'], 403);
-
-    // ⚠️ adapte le nom de table si pivot = enfant_parent avec "enfants"
-    if (!$parent->enfants()->where('enfant.id', $enfantId)->exists()) {
-        return response()->json(['error'=>'Accès non autorisé à cet enfant'], 403);
-    }
-
-    $enfant = Enfant::find($enfantId);
-    if (!$enfant) return response()->json(['error'=>'Enfant non trouvé'], 404);
-
-    // 2) Fenêtre du mois
-    $start = Carbon::createFromDate($annee, $mois, 1)->startOfMonth();
-    $end   = $start->copy()->endOfMonth();
-
-    // 3) Récup des présences existantes dans le mois
-    $presences = Presence::where('enfant_id', $enfantId)
-        ->whereBetween('date_presence', [$start, $end])
-        ->with('educateur.user:id,nom,prenom,name') // selon ton schéma
-        ->orderBy('date_presence')
-        ->get();
-
-    // keyBy date pour lookup rapide
-    $byDate = $presences->keyBy(fn($p) => Carbon::parse($p->date_presence)->format('Y-m-d'));
-
-    // 4) Construire la grille complète + stats
-    $daysInMonth = $start->daysInMonth;
-    $days = [];
-    $stats = ['present'=>0, 'absent'=>0, 'retard'=>0, 'excuse'=>0, 'weekend'=>0];
-
-    for ($d = 1; $d <= $daysInMonth; $d++) {
-        $date = $start->copy()->day($d);
-        $isoDow = $date->dayOfWeekIso; // 1=lundi ... 7=dimanche
-        $isWeekend = in_array($isoDow, [6, 7]); // samedi/dimanche
-
-        $key = $date->format('Y-m-d');
-        $p = $byDate->get($key); // Presence | null
-
-        $statut = $p->statut ?? null;
-
-        // stats
-        if ($isWeekend) $stats['weekend']++;
-        if ($statut && isset($stats[$statut])) $stats[$statut]++;
-
-        $days[] = [
-            'day'        => $d,
-            'date'       => $key,
-            'weekday'    => $isoDow,     // 1..7
-            'is_weekend' => $isWeekend,
-            'statut'     => $statut,     // present|absent|retard|excuse|null
-            'educateur'  => $p?->educateur?->user?->name
-                ?? trim(($p?->educateur?->user?->prenom).' '.($p?->educateur?->user?->nom)),
-        ];
-    }
-
-    // 5) Réponse
-    return response()->json([
-        'enfant' => [
-            'id' => $enfant->id,
-            'nom' => $enfant->nom,
-            'prenom' => $enfant->prenom,
-            'classe' => optional($enfant->classe)->nom,
-        ],
-        'mois'  => $mois,
-        'annee' => $annee,
-        'days'  => $days,     // ← grille complète
-        'stats' => [
-            'present' => $stats['present'],
-            'absent'  => $stats['absent'],
-            'retard'  => $stats['retard'],
-            'excuse'  => $stats['excuse'],
-            'weekend' => $stats['weekend'], // pour le badge jaune "Weekend and holiday"
-        ],
-    ]);
-}
-
-
-    /**
-     * Obtenir la liste des enfants du parent pour la sélection
-     */
-    public function getEnfantsParent()
-    {
-        $parent = Auth::user()->parent;
-        if (!$parent) {
-            return response()->json(['error' => 'Utilisateur non autorisé'], 403);
-        }
-
-        $enfants = $parent->enfants()->with('classe')->get();
-
-        $enfantsFormates = $enfants->map(function ($enfant) {
-            return [
-                'id' => $enfant->id,
-                'nom' => $enfant->nom,
-                'prenom' => $enfant->prenom,
-                'sexe' => $enfant->sexe,
-                'classe' => $enfant->classe ? [
-                    'id' => $enfant->classe->id,
-                    'nom' => $enfant->classe->nom,
-                    'niveau' => $enfant->classe->niveau
-                ] : null
-            ];
-        });
-
-        return response()->json([
-            'enfants' => $enfantsFormates
-        ], 200);
-    }
-
-    /**
-     * Obtenir les statistiques de présence pour un enfant sur une période
-     */
-    public function getStatistiquesPresence(Request $request, $enfantId)
-    {
-        $request->validate([
-            'date_debut' => 'required|date',
-            'date_fin' => 'required|date|after_or_equal:date_debut'
-        ]);
-
-        $parent = Auth::user()->parent;
-        if (!$parent) {
-            return response()->json(['error' => 'Utilisateur non autorisé'], 403);
-        }
-
-        // Vérifier l'accès à l'enfant
-        if (!$parent->enfants()->where('enfant.id', $enfantId)->exists()) {
-            return response()->json(['error' => 'Accès non autorisé à cet enfant'], 403);
-        }
-
-        $presences = Presence::where('enfant_id', $enfantId)
-            ->whereBetween('date_presence', [$request->date_debut, $request->date_fin])
-            ->get();
-
-        $totalJours = $presences->count();
-        $presents = $presences->where('statut', 'present')->count();
-        $absents = $presences->where('statut', 'absent')->count();
-        $retards = $presences->where('statut', 'retard')->count();
-        $excuses = $presences->where('statut', 'excuse')->count();
-
-        return response()->json([
-            'periode' => [
-                'date_debut' => $request->date_debut,
-                'date_fin' => $request->date_fin
-            ],
-            'statistiques' => [
-                'total_jours' => $totalJours,
-                'presents' => $presents,
-                'absents' => $absents,
-                'retards' => $retards,
-                'excuses' => $excuses,
-                'taux_presence' => $totalJours > 0 ? round(($presents / $totalJours) * 100, 2) : 0,
-                'taux_absence' => $totalJours > 0 ? round(($absents / $totalJours) * 100, 2) : 0,
-                'taux_retard' => $totalJours > 0 ? round(($retards / $totalJours) * 100, 2) : 0
-            ]
-        ], 200);
     }
 }

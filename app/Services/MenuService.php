@@ -9,23 +9,27 @@ use Illuminate\Pagination\LengthAwarePaginator;
 
 class MenuService
 {
-    public function upsertDailyMenus(string $date, string $type, ?array $lunch, ?array $snack): Collection
+public function upsertDailyMenus(string $date, string $type, ?array $lunch, ?array $snack): Collection
 {
-    $out = collect();
-    $day = Carbon::parse($date)->toDateString();
+    $out = new Collection(); // <- au lieu de collect()
+    $day = \Carbon\Carbon::parse($date)->toDateString();
 
     $save = function (string $t, array $payload) use ($day) {
-        return Menu::updateOrCreate(
-            ['date_menu' => $day, 'type_repas' => $t],   // clé unique (date,type)
+        return \App\Models\Menu::updateOrCreate(
+            ['date_menu' => $day, 'type_repas' => $t],
             [
                 'description' => trim($payload['description']),
-                'ingredients' => trim($payload['ingredients']), // ← PAS d’auto-remplissage
+                'ingredients' => trim($payload['ingredients']),
             ]
         );
     };
 
-    if (in_array($type, ['lunch','both']) && $lunch)  { $out->push($save('lunch', $lunch)); }
-    if (in_array($type, ['snack','both']) && $snack)  { $out->push($save('snack', $snack)); }
+    if (in_array($type, ['lunch', 'both']) && $lunch) {
+        $out->push($save('lunch', $lunch));
+    }
+    if (in_array($type, ['snack', 'both']) && $snack) {
+        $out->push($save('snack', $snack));
+    }
 
     return $out;
 }

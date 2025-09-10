@@ -37,7 +37,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/activites/stats', [ActiviteController::class, 'stats']);
         Route::get('/menus',        [MenuController::class, 'index'])->name('menus.index');
     Route::get('/menus/{menu}', [MenuController::class, 'show'])->name('menus.show');
-  
+
     // --- Gestion (admin) ---
     Route::middleware(['role:admin'])->group(function () {
         // CRUD
@@ -45,8 +45,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put   ('/menus/{menu}', [MenuController::class, 'update'])->name('menus.update');
         Route::patch ('/menus/{menu}', [MenuController::class, 'update'])->name('menus.patch');
         Route::delete('/menus/{menu}', [MenuController::class, 'destroy'])->name('menus.destroy');
-        Route::post('menus/day', [\App\Http\Controllers\MenuController::class, 'storeDailyMenu']);
-        // Menus hebdomadaires
+        Route::post('/menus/day', [MenuController::class, 'storeDailyMenu'])
+         ->name('menus.day.store');        // Menus hebdomadaires
         Route::post('/menus/weekly',            [MenuController::class, 'createWeeklyMenu'])->name('menus.weekly.create');
     });
 
@@ -162,10 +162,22 @@ Route::middleware('auth:sanctum')->group(function () {
             });
         });
 
-        // ─── PRÉSENCE (NEW) ───
-        Route::get( '/classes',                         [PresenceController::class, 'getClassesEducateur']);
-        Route::get( '/classe/{classeId}/enfants',       [PresenceController::class, 'getEnfantsClasse']);
-        Route::post('/presence/marquer',                [PresenceController::class, 'marquerPresenceClasse']);
+    // ─── NOUVELLES ROUTES POUR PRÉSENCES DES CLASSES ───
+    Route::middleware('educateur.class')->group(function () {
+        // Récupérer les classes assignées à l'éducateur
+        Route::get('/classes', [\App\Http\Controllers\Educateur\PresenceController::class, 'getClassesEducateur']);
+        
+        // Gestion des présences par classe
+        Route::get('/classes/{classeId}/presences', [\App\Http\Controllers\Educateur\PresenceController::class, 'getEnfantsClasse']);
+        Route::post('/classes/{classeId}/presences', [\App\Http\Controllers\Educateur\PresenceController::class, 'marquerPresences']);
+        Route::get('/classes/{classeId}/presences/historique', [\App\Http\Controllers\Educateur\PresenceController::class, 'getHistoriqueClasse']);
+        
+        // Modification individuelle d'une présence
+        Route::put('/presences/{presenceId}', [\App\Http\Controllers\Educateur\PresenceController::class, 'updatePresence']);
+        
+        // Statistiques des présences
+        Route::get('/presences/statistiques', [\App\Http\Controllers\Educateur\PresenceController::class, 'getStatistiquesEducateur']);
+    });
     });
 
     // ─── Parents ───

@@ -1,8 +1,9 @@
 <?php
 
 namespace App\Http\Controllers\Admin;
-
-use App\Http\Requests\MenuRequest;
+use App\Http\Controllers\Controller;             
+use App\Http\Requests\StoreMenuRequest;          
+use App\Http\Requests\UpdateMenuRequest; 
 use App\Models\Menu;
 use App\Services\MenuService;
 use App\Http\Resources\MenuResource;
@@ -17,8 +18,7 @@ class MenuController extends Controller
     public function __construct(MenuService $menuService)
     {
         $this->menuService = $menuService;
-        $this->middleware('auth:api');
-        $this->middleware('role:admin')->except(['index', 'show']);
+
     }
 
     /**

@@ -13,22 +13,13 @@ class Menu extends Model
     protected $table = 'menu';
 
     protected $fillable = [
-        'nom_menu',
         'date_menu',
         'type_repas',
-        'plat_principal',
-        'accompagnement',
-        'dessert',
-        'boisson',
+        'description',
         'ingredients',
-        'informations_nutritionnelles',
-        'prix',
-        'actif',
     ];
 
     protected $casts = [
-        'date_menu' => 'date',
-        'prix' => 'decimal:2',
-        'actif' => 'boolean',
+        'date_menu' => 'date:Y-m-d',
     ];
 }
