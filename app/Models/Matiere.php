@@ -20,6 +20,7 @@ class Matiere extends Model
         'coefficient',
         'couleur',
         'actif',
+        'photo',
     ];
 
     protected $casts = [

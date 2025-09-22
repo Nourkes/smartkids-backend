@@ -17,51 +17,66 @@ class PresenceController extends Controller
      * GET /api/parent/enfants
      * Récupérer les enfants du parent connecté
      */
-    public function getEnfantsParent(): JsonResponse
-    {
-        try {
-            $user = Auth::user();
-            $parent = $user->parent; // Assuming User hasOne Parent relationship
-            
-            if (!$parent) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Profil parent non trouvé'
-                ], 404);
-            }
-
-            $enfants = $parent->enfants()
-                ->with(['classe:id,nom,niveau'])
-                ->select('id', 'nom', 'prenom', 'classe_id', 'date_naissance')
-                ->orderBy('nom')
-                ->get()
-                ->map(function($enfant) {
-                    return [
-                        'id' => $enfant->id,
-                        'nom' => $enfant->nom,
-                        'prenom' => $enfant->prenom,
-                        'nom_complet' => "{$enfant->prenom} {$enfant->nom}",
-                        'age' => now()->diffInYears($enfant->date_naissance),
-                        'classe' => $enfant->classe ? [
-                            'id' => $enfant->classe->id,
-                            'nom' => $enfant->classe->nom,
-                            'niveau' => $enfant->classe->niveau
-                        ] : null
-                    ];
-                });
-
-            return response()->json([
-                'success' => true,
-                'data' => $enfants
-            ]);
-
-        } catch (\Exception $e) {
+   public function getEnfantsParent(): JsonResponse
+{
+    try {
+        $user = Auth::user();
+        if (!$user || !$user->parent) {
             return response()->json([
                 'success' => false,
-                'message' => 'Erreur lors de la récupération des enfants'
-            ], 500);
+                'message' => 'Profil parent non trouvé'
+            ], 404);
         }
+
+        $parent = $user->parent;
+
+        $enfants = $parent->enfants()
+            ->with(['classe:id,nom,niveau'])
+            ->select([
+                'enfant.id',
+                'enfant.nom',
+                'enfant.prenom',
+                'enfant.classe_id',
+                'enfant.date_naissance',
+            ])
+            ->orderBy('enfant.nom')
+            ->get()
+            ->map(function ($enfant) {
+                $age = null;
+                if (!empty($enfant->date_naissance)) {
+                    try {
+                        $age = \Carbon\Carbon::now()
+                            ->diffInYears(\Carbon\Carbon::parse($enfant->date_naissance));
+                    } catch (\Throwable $e) {}
+                }
+                return [
+                    'id'          => $enfant->id,
+                    'nom'         => $enfant->nom,
+                    'prenom'      => $enfant->prenom,
+                    'nom_complet' => trim(($enfant->prenom ?? '').' '.($enfant->nom ?? '')),
+                    'age'         => $age,
+                    'classe'      => $enfant->classe ? [
+                        'id'     => $enfant->classe->id,
+                        'nom'    => $enfant->classe->nom,
+                        'niveau' => $enfant->classe->niveau,
+                    ] : null,
+                ];
+            })
+            ->values();
+
+        return response()->json(['success' => true, 'data' => $enfants]);
+
+    } catch (\Throwable $e) {
+        \Log::error('[parent/enfants] erreur', [
+            'msg' => $e->getMessage(), 'file' => $e->getFile(), 'line' => $e->getLine(),
+        ]);
+        return response()->json([
+            'success' => false,
+            'message' => 'Erreur lors de la récupération des enfants',
+            // 'debug' => $e->getMessage(),
+        ], 500);
     }
+}
 
     /**
      * GET /api/parent/enfants/{enfantId}/presences

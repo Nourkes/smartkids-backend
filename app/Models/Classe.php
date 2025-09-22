@@ -30,6 +30,7 @@ public function educateurs()
         return $this->hasMany(Enfant::class);
     }
 // Dans app/Models/Classe.php - ajouter cette méthode
+public function salle() { return $this->belongsTo(\App\Models\Salle::class, 'salle_id'); }
 
 public function matieres()
 {
