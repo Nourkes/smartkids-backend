@@ -19,7 +19,7 @@ use App\Http\Controllers\Educateur\GradeController as EduGradeController;
 use App\Http\Controllers\Parent\ReportCardController;
 use App\Http\Controllers\Educateur\EducateurEmploiController;
 use App\Http\Controllers\EmploiQueryController;
-
+use App\Http\Controllers\Chat\ClassChatController;
 // Présences (⚠️ alias pour lever la collision de nom)
 use App\Http\Controllers\Parent\PresenceController   as ParentPresenceController;
 use App\Http\Controllers\Educateur\PresenceController as EducateurPresenceController;
@@ -165,6 +165,14 @@ Route::middleware('auth:sanctum')->group(function () {
 
 Route::prefix('parent')->middleware('role:parent')->group(function () {
     Route::get('/enfants/{id}/report-card', [ReportCardController::class, 'show']);
+});
+Route::middleware('auth:sanctum')->group(function() {
+    Route::get('/chat/rooms', [ClassChatController::class,'myRooms']);
+    Route::get('/chat/rooms/{room}/participants', [ClassChatController::class,'participants']);
+    Route::get('/chat/rooms/by-classe/{classe}', [ClassChatController::class,'ensureRoom']); // crée si pas
+    Route::get('/chat/rooms/{room}/messages', [ClassChatController::class,'messages']);
+    Route::post('/chat/rooms/{room}/messages', [ClassChatController::class,'send']);
+    Route::post('/chat/rooms/{room}/read', [ClassChatController::class,'markRead']);
 });
     // Alias historique pour compat avec ton appli Flutter d'avant
     Route::get('/parents/me', [AdminParentController::class, 'profile'])->middleware('role:parent');
