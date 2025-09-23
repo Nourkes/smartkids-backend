@@ -15,7 +15,8 @@ use App\Http\Controllers\Admin\EducateurController;
 use App\Http\Controllers\Admin\EmploiTemplateController;
 use App\Http\Controllers\Admin\EmploiBatchController;
 use App\Http\Controllers\Admin\MatiereController;
-
+use App\Http\Controllers\Educateur\GradeController as EduGradeController;
+use App\Http\Controllers\Parent\ReportCardController;
 use App\Http\Controllers\Educateur\EducateurEmploiController;
 use App\Http\Controllers\EmploiQueryController;
 
@@ -146,6 +147,7 @@ Route::middleware('auth:sanctum')->group(function () {
         // Profil & enfants
         Route::get('/profile',  [AdminParentController::class, 'profile']);
         Route::put('/profile',  [AdminParentController::class, 'updateProfile']);
+        Route::get('/menus/weekly/current', [MenuController::class, 'getCurrentWeekMenu']);
 
         Route::get('/enfants',  [ParentPresenceController::class, 'getEnfantsParent']); // <= EXISTE dans ton contrôleur
 
@@ -156,7 +158,14 @@ Route::middleware('auth:sanctum')->group(function () {
         // (Si tu ajoutes un jour un contrôleur d’activités parent)
         // Route::get('/activites/disponibles', [ActiviteParentController::class, 'activitesDisponibles']);
     });
+     Route::prefix('educateur')->middleware('role:educateur')->group(function () {
+    Route::get ('/grades/roster', [EduGradeController::class, 'roster']);
+    Route::post('/grades/bulk',   [EduGradeController::class, 'bulkUpsert']);
+});
 
+Route::prefix('parent')->middleware('role:parent')->group(function () {
+    Route::get('/enfants/{id}/report-card', [ReportCardController::class, 'show']);
+});
     // Alias historique pour compat avec ton appli Flutter d'avant
     Route::get('/parents/me', [AdminParentController::class, 'profile'])->middleware('role:parent');
 });
