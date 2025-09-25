@@ -6,81 +6,54 @@ namespace App\Http\Controllers\Parent;
 use App\Http\Controllers\Controller;
 use App\Models\Activite;
 use App\Models\Enfant;
-use App\Models\ParticipationActivite;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
 class ActiviteParentController extends Controller
 {
     /**
-     * Liste des activités disponibles pour inscription
+     * Activités disponibles pour inscription
+     * (disponible = date_activite >= aujourd'hui)
      */
     public function activitesDisponibles(Request $request): JsonResponse
     {
-        $query = Activite::with(['educateurs'])
-            ->where('statut', 'planifiee')
-            ->where('date_activite', '>=', today());
+        $q = Activite::with(['educateurs'])
+            ->whereDate('date_activite', '>=', now()->toDateString());
 
-        // Filtres
-        if ($request->filled('type')) {
-            $query->where('type', $request->type);
+        // Filtres optionnels
+        $type = (string) $request->input('type', '');
+        if ($type !== '') {
+            $q->where('type', $type);
         }
 
-        if ($request->filled('date_debut')) {
-            $query->where('date_activite', '>=', $request->date_debut);
+        $dateDebut = $request->input('date_debut');
+        if (!empty($dateDebut)) {
+            $q->whereDate('date_activite', '>=', $dateDebut);
         }
 
-        if ($request->filled('date_fin')) {
-            $query->where('date_activite', '<=', $request->date_fin);
+        $dateFin = $request->input('date_fin');
+        if (!empty($dateFin)) {
+            $q->whereDate('date_activite', '<=', $dateFin);
         }
 
-        // Recherche
-        if ($request->filled('search')) {
-            $query->where('nom', 'like', '%' . $request->search . '%');
+        $search = (string) $request->input('search', '');
+        if ($search !== '') {
+            $q->where('nom', 'like', "%{$search}%");
         }
 
-        $activites = $query->orderBy('date_activite', 'asc')
-                          ->paginate($request->get('per_page', 10));
+        $perPage = (int) $request->input('per_page', 10);
+
+        $activites = $q->orderBy('date_activite', 'asc')
+            ->orderBy('heure_debut', 'asc')
+            ->paginate($perPage);
 
         return response()->json([
             'success' => true,
-            'data' => $activites
+            'data'    => $activites,
         ]);
-    }
-
-    /**
-     * Mes enfants et leurs activités
-     */
-    public function activitesEnfants(): JsonResponse
-    {
-        $parent = Auth::user()->parent;
-        
-        if (!$parent) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Profil parent non trouvé'
-            ], 404);
-        }
-
-        $enfants = $parent->enfants()->with([
-            'activites' => function($query) {
-                $query->withPivot([
-                    'statut_participation',
-                    'remarques',
-                    'note_evaluation',
-                    'date_inscription',
-                    'date_presence'
-                ])->orderBy('date_activite', 'desc');
-            }
-        ])->get();
-
-        return response()->json([
-            'success' => true,
-            'data' => $enfants
-        ]);
+        // NB: pagination Laravel renvoie déjà { data, links, meta }.
     }
 
     /**
@@ -88,191 +61,81 @@ class ActiviteParentController extends Controller
      */
     public function historiqueEnfant(Enfant $enfant): JsonResponse
     {
-        // Vérifier que l'enfant appartient au parent connecté
-        if ($enfant->parent_id !== Auth::user()->parent->id) {
+        $parentId = optional(Auth::user()->parent)->id;
+        if ((int) $enfant->parent_id !== (int) $parentId) {
             return response()->json([
                 'success' => false,
-                'message' => 'Accès non autorisé'
+                'message' => 'Accès non autorisé',
             ], 403);
         }
 
         $activites = $enfant->activites()
             ->withPivot([
                 'statut_participation',
-                'remarques', 
+                'remarques',
                 'note_evaluation',
                 'date_inscription',
-                'date_presence'
+                'date_presence',
             ])
             ->orderBy('date_activite', 'desc')
             ->paginate(15);
 
         return response()->json([
             'success' => true,
-            'data' => $activites
+            'data'    => $activites,
         ]);
     }
 
     /**
-     * Inscrire un enfant à une activité
-     */
-    public function inscrireEnfant(Request $request): JsonResponse
-    {
-        $request->validate([
-            'enfant_id' => 'required|exists:enfants,id',
-            'activite_id' => 'required|exists:activite,id'
-        ]);
-
-        $parent = Auth::user()->parent;
-        $enfant = Enfant::find($request->enfant_id);
-        $activite = Activite::find($request->activite_id);
-
-        // Vérifier que l'enfant appartient au parent
-        if ($enfant->parent_id !== $parent->id) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Cet enfant ne vous appartient pas'
-            ], 403);
-        }
-
-        // Vérifications d'éligibilité
-        if (!$activite->peutAccepterInscription()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Cette activité n\'accepte plus d\'inscriptions'
-            ], 422);
-        }
-
-        // Vérifier si déjà inscrit
-        if ($activite->enfantEstInscrit($enfant->id)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'L\'enfant est déjà inscrit à cette activité'
-            ], 422);
-        }
-
-        try {
-            $activite->enfants()->attach($enfant->id, [
-                'statut_participation' => 'inscrit',
-                'date_inscription' => now()
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Inscription réalisée avec succès'
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Erreur lors de l\'inscription',
-                'error' => $e->getMessage()
-            ], 500);
-        }
-    }
-
-    /**
-     * Désinscrire un enfant d'une activité
-     */
-    public function desinscrireEnfant(Request $request): JsonResponse
-    {
-        $request->validate([
-            'enfant_id' => 'required|exists:enfants,id',
-            'activite_id' => 'required|exists:activite,id'
-        ]);
-
-        $parent = Auth::user()->parent;
-        $enfant = Enfant::find($request->enfant_id);
-        $activite = Activite::find($request->activite_id);
-
-        // Vérifier que l'enfant appartient au parent
-        if ($enfant->parent_id !== $parent->id) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Cet enfant ne vous appartient pas'
-            ], 403);
-        }
-
-        // Vérifier l'inscription
-        if (!$activite->enfantEstInscrit($enfant->id)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'L\'enfant n\'est pas inscrit à cette activité'
-            ], 404);
-        }
-
-        // Vérifier si la désinscription est encore possible
-        if ($activite->date_activite <= today()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Impossible de se désinscrire, l\'activité a déjà eu lieu ou est en cours'
-            ], 422);
-        }
-
-        try {
-            $activite->enfants()->detach($enfant->id);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Désinscription réalisée avec succès'
-            ]);
-        } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Erreur lors de la désinscription',
-                'error' => $e->getMessage()
-            ], 500);
-        }
-    }
-
-    /**
-     * Statistiques des activités pour un enfant
+     * Statistiques d’un enfant (sans colonne "statut")
+     * - terminé = date_activite < aujourd'hui
+     * - à venir  = date_activite > aujourd'hui
      */
     public function statistiquesEnfant(Enfant $enfant): JsonResponse
     {
-        // Vérifier que l'enfant appartient au parent connecté
-        if ($enfant->parent_id !== Auth::user()->parent->id) {
+        $parentId = optional(Auth::user()->parent)->id;
+        if ((int) $enfant->parent_id !== (int) $parentId) {
             return response()->json([
                 'success' => false,
-                'message' => 'Accès non autorisé'
+                'message' => 'Accès non autorisé',
             ], 403);
         }
 
-        $stats = [
-            'total_activites' => $enfant->activites()->count(),
-            'activites_terminees' => $enfant->activites()
-                ->where('statut', 'terminee')
-                ->count(),
-            'presences' => $enfant->activites()
-                ->wherePivot('statut_participation', 'present')
-                ->count(),
-            'absences' => $enfant->activites()
-                ->wherePivot('statut_participation', 'absent')
-                ->count(),
-            'activites_a_venir' => $enfant->activites()
-                ->where('date_activite', '>', today())
-                ->where('statut', 'planifiee')
-                ->count(),
-            'note_moyenne' => $enfant->activites()
-                ->whereNotNull('participation_activite.note_evaluation')
-                ->avg('participation_activite.note_evaluation'),
-            'taux_presence' => 0
-        ];
+        $total      = $enfant->activites()->count();
 
-        // Calculer le taux de présence
-        $totalTerminees = $stats['activites_terminees'];
-        if ($totalTerminees > 0) {
-            $stats['taux_presence'] = round(($stats['presences'] / $totalTerminees) * 100, 2);
-        }
+        $terminees  = $enfant->activites()
+            ->whereDate('date_activite', '<', now()->toDateString())
+            ->count();
 
-        // Activités par type
-        $stats['par_type'] = $enfant->activites()
+        $aVenir     = $enfant->activites()
+            ->whereDate('date_activite', '>', now()->toDateString())
+            ->count();
+
+        $presences  = $enfant->activites()
+            ->wherePivot('statut_participation', 'present')
+            ->count();
+
+        $absences   = $enfant->activites()
+            ->wherePivot('statut_participation', 'absent')
+            ->count();
+
+        $noteMoy    = $enfant->activites()
+            ->whereNotNull('participation_activite.note_evaluation')
+            ->avg('participation_activite.note_evaluation');
+
+        $tauxPresence = $terminees > 0
+            ? round(($presences / $terminees) * 100, 2)
+            : 0;
+
+        // Répartition par type
+        $parType = $enfant->activites()
             ->selectRaw('type, COUNT(*) as count')
             ->whereNotNull('type')
             ->groupBy('type')
             ->get();
 
         // Dernières activités
-        $stats['dernieres_activites'] = $enfant->activites()
+        $dernieres = $enfant->activites()
             ->withPivot(['statut_participation', 'note_evaluation'])
             ->orderBy('date_activite', 'desc')
             ->limit(5)
@@ -280,53 +143,63 @@ class ActiviteParentController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $stats
+            'data' => [
+                'total_activites'     => $total,
+                'activites_terminees' => $terminees,
+                'activites_a_venir'   => $aVenir,
+                'presences'           => $presences,
+                'absences'            => $absences,
+                'note_moyenne'        => $noteMoy,
+                'taux_presence'       => $tauxPresence,
+                'par_type'            => $parType,
+                'dernieres_activites' => $dernieres,
+            ],
         ]);
     }
 
     /**
-     * Calendrier des activités pour un enfant
+     * Calendrier mensuel (sans champ "statut")
      */
     public function calendrierEnfant(Request $request, Enfant $enfant): JsonResponse
     {
-        // Vérifier que l'enfant appartient au parent connecté
-        if ($enfant->parent_id !== Auth::user()->parent->id) {
+        $parentId = optional(Auth::user()->parent)->id;
+        if ((int) $enfant->parent_id !== (int) $parentId) {
             return response()->json([
                 'success' => false,
-                'message' => 'Accès non autorisé'
+                'message' => 'Accès non autorisé',
             ], 403);
         }
 
-        $mois = $request->get('mois', Carbon::now()->month);
-        $annee = $request->get('annee', Carbon::now()->year);
+        $mois  = (int) $request->input('mois',  Carbon::now()->month);
+        $annee = (int) $request->input('annee', Carbon::now()->year);
 
         $activites = $enfant->activites()
             ->withPivot(['statut_participation', 'remarques', 'note_evaluation'])
-            ->whereMonth('date_activite', $mois)
             ->whereYear('date_activite', $annee)
+            ->whereMonth('date_activite', $mois)
             ->orderBy('date_activite', 'asc')
             ->get()
-            ->map(function ($activite) {
+            ->map(function ($a) {
                 return [
-                    'id' => $activite->id,
-                    'nom' => $activite->nom,
-                    'date' => $activite->date_activite->format('Y-m-d'),
-                    'heure_debut' => $activite->heure_debut,
-                    'heure_fin' => $activite->heure_fin,
-                    'statut' => $activite->statut,
-                    'statut_participation' => $activite->pivot->statut_participation,
-                    'note_evaluation' => $activite->pivot->note_evaluation,
-                    'type' => $activite->type
+                    'id'                   => $a->id,
+                    'nom'                  => $a->nom,
+                    'date'                 => Carbon::parse($a->date_activite)->format('Y-m-d'),
+                    'heure_debut'          => $a->heure_debut,
+                    'heure_fin'            => $a->heure_fin,
+                    'type'                 => $a->type,
+                    'statut_participation' => $a->pivot->statut_participation,
+                    'note_evaluation'      => $a->pivot->note_evaluation,
                 ];
-            });
+            })
+            ->values();
 
         return response()->json([
             'success' => true,
             'data' => [
-                'mois' => $mois,
-                'annee' => $annee,
-                'activites' => $activites
-            ]
+                'mois'      => $mois,
+                'annee'     => $annee,
+                'activites' => $activites,
+            ],
         ]);
     }
 
@@ -335,15 +208,14 @@ class ActiviteParentController extends Controller
      */
     public function detailsActiviteEnfant(Activite $activite, Enfant $enfant): JsonResponse
     {
-        // Vérifier que l'enfant appartient au parent connecté
-        if ($enfant->parent_id !== Auth::user()->parent->id) {
+        $parentId = optional(Auth::user()->parent)->id;
+        if ((int) $enfant->parent_id !== (int) $parentId) {
             return response()->json([
                 'success' => false,
-                'message' => 'Accès non autorisé'
+                'message' => 'Accès non autorisé',
             ], 403);
         }
 
-        // Récupérer l'activité avec les détails de participation
         $participation = $activite->enfants()
             ->where('enfant_id', $enfant->id)
             ->withPivot([
@@ -351,14 +223,14 @@ class ActiviteParentController extends Controller
                 'remarques',
                 'note_evaluation',
                 'date_inscription',
-                'date_presence'
+                'date_presence',
             ])
             ->first();
 
         if (!$participation) {
             return response()->json([
                 'success' => false,
-                'message' => 'L\'enfant n\'est pas inscrit à cette activité'
+                'message' => "L'enfant n'est pas inscrit à cette activité",
             ], 404);
         }
 
@@ -370,12 +242,12 @@ class ActiviteParentController extends Controller
                 'activite' => $activite,
                 'participation' => [
                     'statut_participation' => $participation->pivot->statut_participation,
-                    'remarques' => $participation->pivot->remarques,
-                    'note_evaluation' => $participation->pivot->note_evaluation,
-                    'date_inscription' => $participation->pivot->date_inscription,
-                    'date_presence' => $participation->pivot->date_presence
-                ]
-            ]
+                    'remarques'            => $participation->pivot->remarques,
+                    'note_evaluation'      => $participation->pivot->note_evaluation,
+                    'date_inscription'     => $participation->pivot->date_inscription,
+                    'date_presence'        => $participation->pivot->date_presence,
+                ],
+            ],
         ]);
     }
 }

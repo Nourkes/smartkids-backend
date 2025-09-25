@@ -5,6 +5,7 @@ use Illuminate\Support\Facades\Route;
 // ───────────── Imports ─────────────
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\Auth\RoleController;
+use App\Http\Controllers\Parent\ActiviteParticipationController;
 
 use App\Http\Controllers\Admin\MenuController;
 use App\Http\Controllers\Admin\ParentController as AdminParentController;
@@ -26,7 +27,7 @@ use App\Http\Controllers\Educateur\PresenceController as EducateurPresenceContro
 
 // (optionnels)
 use App\Http\Controllers\Educateur\ActiviteController as ActiviteEducateurController;
-use App\Http\Controllers\Parent\ActiviteController    as ActiviteParentController;
+use App\Http\Controllers\Parent\ActiviteParentController; // ✅
 
 // ──────────────── ROUTES PUBLIQUES ────────────────
 Route::get('/test', fn () => response()->json(['message' => 'Hello depuis Laravel']));
@@ -52,7 +53,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // ───────────────── Admin ─────────────────
     Route::prefix('admin')->middleware('role:admin')->group(function () {
-
+        
         // Menus
         Route::get   ('/menus',                [MenuController::class, 'index'])->name('menus.index');
         Route::get   ('/menus/{menu}',         [MenuController::class, 'show'])->name('menus.show');
@@ -142,22 +143,22 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get ('/presences/statistiques',                 [EducateurPresenceController::class, 'getStatistiquesEducateur']);
     });
 
-    // ───────────────── Parents ─────────────────
-    Route::prefix('parent')->middleware('role:parent')->group(function () {
-        // Profil & enfants
-        Route::get('/profile',  [AdminParentController::class, 'profile']);
-        Route::put('/profile',  [AdminParentController::class, 'updateProfile']);
-        Route::get('/menus/weekly/current', [MenuController::class, 'getCurrentWeekMenu']);
+  // ───────────────── Parents ─────────────────
+Route::prefix('parent')->middleware(['auth:sanctum','role:parent'])->group(function () {
+    // Profil & enfants
+    Route::get('/profile',  [AdminParentController::class, 'profile']);
+    Route::put('/profile',  [AdminParentController::class, 'updateProfile']);
+    Route::get('/menus/weekly/current', [MenuController::class, 'getCurrentWeekMenu']);
+    Route::get('/enfants',  [ParentPresenceController::class, 'getEnfantsParent']);
+    Route::get('/enfants/{enfantId}/presences',            [ParentPresenceController::class, 'getPresencesEnfant']);
+    Route::get('/enfants/{enfantId}/presences/calendrier', [ParentPresenceController::class, 'getCalendrierEnfant']);
 
-        Route::get('/enfants',  [ParentPresenceController::class, 'getEnfantsParent']); // <= EXISTE dans ton contrôleur
+    // 👇👇 Les routes activités parent (propres et cohérentes)
+    Route::get   ('/activites/disponibles',                      [ActiviteParentController::class, 'activitesDisponibles']);
+    Route::post  ('/activites/{activite}/participer',            [ActiviteParticipationController::class, 'participer']);
+    Route::delete('/activites/{activite}/participations/{enfant}', [ActiviteParticipationController::class, 'annuler']);
+});
 
-        // Présences (chemins alignés sur ton contrôleur)
-        Route::get('/enfants/{enfantId}/presences',                 [ParentPresenceController::class, 'getPresencesEnfant']);
-        Route::get('/enfants/{enfantId}/presences/calendrier',      [ParentPresenceController::class, 'getCalendrierEnfant']);
-
-        // (Si tu ajoutes un jour un contrôleur d’activités parent)
-        // Route::get('/activites/disponibles', [ActiviteParentController::class, 'activitesDisponibles']);
-    });
      Route::prefix('educateur')->middleware('role:educateur')->group(function () {
     Route::get ('/grades/roster', [EduGradeController::class, 'roster']);
     Route::post('/grades/bulk',   [EduGradeController::class, 'bulkUpsert']);
@@ -173,6 +174,19 @@ Route::middleware('auth:sanctum')->group(function() {
     Route::get('/chat/rooms/{room}/messages', [ClassChatController::class,'messages']);
     Route::post('/chat/rooms/{room}/messages', [ClassChatController::class,'send']);
     Route::post('/chat/rooms/{room}/read', [ClassChatController::class,'markRead']);
+});
+
+    Route::middleware('auth:sanctum')->group(function () {
+
+    // ───────── Admin ─────────
+    Route::prefix('admin')->middleware('role:admin')->group(function () {
+        // … tes autres routes …
+
+        // CRUD éducateurs (si tu veux l’API complète côté admin)
+        Route::apiResource('educateurs', EducateurController::class);
+
+    });
+
 });
     // Alias historique pour compat avec ton appli Flutter d'avant
     Route::get('/parents/me', [AdminParentController::class, 'profile'])->middleware('role:parent');
