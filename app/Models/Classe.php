@@ -38,4 +38,23 @@ public function matieres()
                 ->withPivot('heures_par_semaine', 'objectifs_specifiques')
                 ->withTimestamps();
 }
+// Inscriptions "réservées ou finalisées" sur cette classe
+public function inscriptionsActives()
+{
+    return $this->hasMany(Inscription::class, 'classe_id')
+                ->whereIn('statut', ['payment_pending','accepted']);
+}
+
+public function getNombrePlacesOccupees(): int
+{
+    return $this->inscriptionsActives()->count();
+}
+
+public function hasPlacesDisponibles(): bool
+{
+    $cap = (int) ($this->capacite_max ?? 0);
+    if ($cap <= 0) return true; // illimité
+    return $this->getNombrePlacesOccupees() < $cap;
+}
+
 }

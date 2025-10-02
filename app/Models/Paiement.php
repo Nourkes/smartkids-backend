@@ -46,4 +46,6 @@ class Paiement extends Model
     {
         return $this->belongsTo(ParticipationActivite::class);
     }
+    public function scopeEnAttente($q) { return $q->where('statut','en_attente'); }
+
 }
