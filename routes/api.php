@@ -40,6 +40,9 @@ Route::get('/activites/types', [AdminActiviteController::class, 'typesPublic']);
 
 // ──────────────── ROUTES PROTÉGÉES ────────────────
 Route::middleware('auth:sanctum')->group(function () {
+    Route::post('/auth/first-login/send-code',      [AuthController::class, 'sendFirstLoginCode']);
+    Route::post('/auth/first-login/verify',         [AuthController::class, 'verifyFirstLoginCode']);
+    Route::post('/auth/first-login/reset-password', [AuthController::class, 'resetFirstLoginPassword']);
 
     // ─── Session / profil générique ───
     Route::prefix('auth')->group(function () {
@@ -80,7 +83,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch ('/parents/{parent}/status',     [AdminParentController::class, 'changeStatus']);
         Route::delete('/parents/{parent}',            [AdminParentController::class, 'destroy']);
         Route::get   ('/parents/stats',               [AdminParentController::class, 'stats']);
-
+            Route::get('/parents',        [ParentController::class, 'index']);
+    Route::get('/parents/{id}',   [ParentController::class, 'show']);
         /* ------------ Enfants (admin) ------------ */
         Route::post('enfants/with-parent',            [EnfantController::class, 'storeWithParent'])->name('admin.enfants.store-with-parent');
         Route::apiResource('enfants', EnfantController::class);

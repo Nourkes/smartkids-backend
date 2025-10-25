@@ -13,31 +13,62 @@ use Illuminate\Database\Eloquent\Builder;
 class ParentService
 {
     
-    public function createParent(array $data): ParentModel
+ public function createParent(array $data): ParentModel
     {
         return DB::transaction(function () use ($data) {
-            Log::info('Creating parent user', ['email' => $data['email']]);
+            // 1) Log d'intention
+            Log::info('Creating parent user', ['email' => $data['email'] ?? null]);
 
+            // 2) Générer un mot de passe provisoire fort
+            $tempPassword = Str::random(12);
+
+            // 3) Construire le nom d'affichage
+            $displayName = trim(($data['nom'] ?? '') . ' ' . ($data['prenom'] ?? ''));
+            if ($displayName === '') {
+                // fallback si nom/prenom absents : utiliser "name" ou l'email
+                $displayName = $data['name'] ?? ($data['email'] ?? 'Parent');
+            }
+
+            // 4) Créer l'utilisateur (role: parent)
+            /** @var \App\Models\User $user */
             $user = User::create([
-                'name' => $data['nom'] . ' ' . $data['prenom'],
-                'email' => $data['email'],
-                'password' => Hash::make($data['password']),
-                'role' => 'parent',
+                'name'     => $displayName,
+                'email'    => $data['email'],
+                'role'     => 'parent',
+                'password' => Hash::make($tempPassword),
             ]);
 
+            // 5) Créer le ParentModel
+            /** @var \App\Models\ParentModel $parent */
             $parent = ParentModel::create([
-                'user_id' => $user->id,
-                'profession' => $data['profession'] ?? null,
-                'telephone' => $data['telephone'],
-                'adresse' => $data['adresse'] ?? null,
-                'contact_urgence_nom' => $data['contact_urgence_nom'] ?? null,
+                'user_id'                   => $user->id,
+                'profession'                => $data['profession']            ?? null,
+                'telephone'                 => $data['telephone']             ?? null,
+                'adresse'                   => $data['adresse']               ?? null,
+                'contact_urgence_nom'       => $data['contact_urgence_nom']   ?? null,
                 'contact_urgence_telephone' => $data['contact_urgence_telephone'] ?? null,
             ]);
 
+            // 6) Lier les enfants si fournis
             if (!empty($data['enfants']) && is_array($data['enfants'])) {
-                $parent->enfants()->attach($data['enfants']);
+                // On filtre pour ne garder que des IDs scalaires
+                $ids = array_values(array_filter($data['enfants'], fn($v) => is_scalar($v)));
+                if (!empty($ids)) {
+                    $parent->enfants()->syncWithoutDetaching($ids);
+                }
             }
 
+            // 7) Forcer le changement de mot de passe au premier login (via Cache, pas DB)
+            Cache::put("first_login:{$user->id}:force", true, now()->addDays(7));
+
+            // 8) Envoyer l'email avec le mot de passe provisoire
+            Mail::to($user->email)->send(
+                new TempPasswordMail(name: $user->name, tempPassword: $tempPassword, email: $user->email)
+            );
+
+            Log::info('Parent user created successfully', ['user_id' => $user->id]);
+
+            // 9) Retour avec relations utiles
             return $parent->load(['user', 'enfants']);
         });
     }

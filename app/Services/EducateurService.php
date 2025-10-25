@@ -6,7 +6,13 @@ use App\Models\User;
 use App\Models\Educateur;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Cache;
+// ➜ AJOUTE CECI :
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 
+// (si tu envoies un Mailable)
+use App\Mail\TempPasswordMail;
 class EducateurService
 {
     public function getAllEducateurs($perPage = 15, $search = null)
@@ -26,32 +32,50 @@ class EducateurService
     /**
      * Créer un éducateur et son utilisateur associé
      */
-    public function createEducateur(array $data)
-    {
-        return DB::transaction(function () use ($data) {
-            // 1) Créer l'utilisateur SANS mot de passe
-            $user = User::create([
-                'name'  => $data['name'],
-                'email' => $data['email'],
-                'role'  => 'educateur',
-                // Option A (recommandée) : password nullable en DB => on ne met rien
-                // 'password' => null,
-                //
-                // Option B (si colonne non-nullable) : stocker une chaîne vide
-                'password' => '',
-            ]);
+   public function createEducateur(array $data)
+{
+    return DB::transaction(function () use ($data) {
+        // 1) Générer un mot de passe provisoire
+        $tempPassword = Str::random(12);
 
-            // 2) Créer l’éducateur
-            $educateur = Educateur::create([
-                'user_id'       => $user->id,
-                'diplome'       => $data['diplome'] ?? null,
-                'date_embauche' => $data['date_embauche'] ?? null,
-                'salaire'       => $data['salaire'] ?? 0,
-            ]);
+        // 2) Créer l'utilisateur avec ce MDP
+        $user = User::create([
+            'name'                  => $data['name'],
+            'email'                 => $data['email'],
+            'role'                  => 'educateur',
+            'password'              => Hash::make($tempPassword),
+            'must_change_password'  => true, // ⬅️ important (si colonne en DB)
+        ]);
 
-            return $educateur->load('user');
-        });
-    }
+        // 3) Forcer le changement au premier login (flag de workflow)
+        Cache::put("first_login:{$user->id}:force", true, now()->addDays(7));
+
+        // 4) Créer l’éducateur
+        $educateur = Educateur::create([
+            'user_id'       => $user->id,
+            'diplome'       => $data['diplome'] ?? null,
+            'date_embauche' => $data['date_embauche'] ?? null,
+            'salaire'       => $data['salaire'] ?? 0,
+        ]);
+
+        // 5) Envoyer le mot de passe provisoire par email (sans casser la transac)
+        try {
+            // Version Mailable (recommandée)
+            Mail::to($user->email)->send(
+                new TempPasswordMail(
+                    name: $user->name,
+                    email: $user->email,
+                    tempPassword: $tempPassword
+                )
+            );
+
+        } catch (\Throwable $e) {
+            \Log::warning('Envoi mail (temp password) échoué: '.$e->getMessage());
+        }
+
+        return $educateur->load('user');
+    });
+}
 
 
     public function updateEducateur(Educateur $educateur, array $data)
