@@ -16,6 +16,8 @@ class EducateurResource extends JsonResource
             'email' => $this->user->email,
             'diplome' => $this->diplome,
             'date_embauche' => $this->date_embauche->format('Y-m-d'),
+            'telephone'     => $this->telephone,       // ✅
+
             'salaire' => $this->when(
                 auth()->user()->isAdmin(), 
                 $this->salaire
@@ -26,6 +28,8 @@ class EducateurResource extends JsonResource
             // Relations (chargées conditionnellement)
             'classes' => ClasseResource::collection($this->whenLoaded('classes')),
             'activites' => ActiviteResource::collection($this->whenLoaded('activites')),
+            'photo' => $this->photo, 
+            
         ];
     }
 }

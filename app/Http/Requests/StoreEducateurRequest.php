@@ -21,6 +21,16 @@ class StoreEducateurRequest extends FormRequest
             'diplome' => 'required|string|max:255',
             'date_embauche' => 'required|date',
             'salaire' => 'required|numeric|min:0',
+            'telephone'     => ['nullable','string','max:20', 'regex:/^[0-9+\s().-]{6,20}$/'],
+            'photo' => [
+            'nullable',
+            'file',
+            'image',
+            'mimes:jpg,jpeg,png,webp',
+            'max:3072',
+            // 'dimensions:min_width=128,min_height=128', // optionnel
+        ],
+
         ];
     }
 

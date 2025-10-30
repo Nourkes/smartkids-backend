@@ -8,9 +8,20 @@ use App\Services\ClassChatService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
-
+use Symfony\Component\HttpFoundation\StreamedResponse;
 class ClassChatController extends Controller
 {
+    public function file(string $path): StreamedResponse
+{
+    // On travaille sur le disk 'public' (storage/app/public)
+    abort_unless(Storage::disk('public')->exists($path), 404);
+
+    // Optionnel : sécuriser le répertoire
+    abort_unless(str_starts_with($path, 'chat_attachments/'), 403);
+
+    // Retourne le fichier (avec les bons headers)
+    return Storage::disk('public')->response($path);
+}
     public function __construct(private ClassChatService $svc) {}
 
     // liste des salons où je suis membre

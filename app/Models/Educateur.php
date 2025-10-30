@@ -16,6 +16,8 @@ class Educateur extends Model
         'diplome',
         'date_embauche',
         'salaire',
+        'photo',
+        'telephone',
     ];
 
     protected $casts = [
@@ -30,6 +32,10 @@ class Educateur extends Model
     {
         return $this->belongsTo(User::class);
     }
+    public function getPhotoUrlAttribute(): ?string
+{
+    return $this->photo ? \Storage::url($this->photo) : null;
+}
 
     /**
      * Relation many-to-many avec les activités

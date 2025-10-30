@@ -25,6 +25,8 @@ use App\Http\Controllers\Educateur\PresenceController as EducateurPresenceContro
 use App\Http\Controllers\PublicInscriptionController;
 use App\Http\Controllers\Admin\InscriptionAdminController;
 use App\Http\Controllers\PaiementController;
+use App\Http\Controllers\Statistics\GlobalStatisticsController;
+use App\Http\Controllers\Statistics\PaymentsStatisticsController;
 // ──────────────── ROUTES PUBLIQUES ────────────────
 Route::get('/test', fn () => response()->json(['message' => 'Hello depuis Laravel']));
 
@@ -37,7 +39,8 @@ Route::prefix('auth')->group(function () {
 // Exemple public
 Route::get('/activites/types', [AdminActiviteController::class, 'typesPublic']);
 
-
+Route::get('/chat/file/{path}', [ClassChatController::class, 'file'])
+    ->where('path', '.*'); // accepte les sous-dossiers
 // ──────────────── ROUTES PROTÉGÉES ────────────────
 Route::middleware('auth:sanctum')->group(function () {
     Route::post('/auth/first-login/send-code',      [AuthController::class, 'sendFirstLoginCode']);
@@ -201,6 +204,11 @@ Route::post('/inscriptions', [PublicInscriptionController::class, 'store'])
 /**
  * Admin protégées
  */
+
+Route::middleware(['auth:sanctum', ]) // adapte selon ton auth
+    ->get('/statistics/global/basic', [GlobalStatisticsController::class, 'basic']);
+    Route::get('/statistics/payments/revenue-series', [PaymentsStatisticsController::class, 'revenueSeries']);
+
 // --------- PUBLIC ---------
 Route::post('/inscriptions', [PublicInscriptionController::class, 'store']);
 
