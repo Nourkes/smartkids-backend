@@ -12,7 +12,10 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Carbon\Carbon;
-use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Mail;
+use App\Mail\InscriptionReceivedMail;
+use App\Mail\InscriptionAcceptedMail;
+
 /**
  * Orchestration du flux d'inscription:
  * - dépôt (public)
@@ -29,7 +32,7 @@ class InscriptionFlowService
     /** Nb de jours avant échéance paiement (fallback: 3) */
     private function echeanceJours(): int
     {
-        return (int) config('school.paiement_echeance_jours', 3);
+        return (int) config('school.payment_deadline_days', 3);
     }
 
     /** Normalise la méthode de paiement */
@@ -45,15 +48,15 @@ class InscriptionFlowService
     public function create(array $data): Inscription
     {
         return DB::transaction(function () use ($data) {
+
             $form = InscriptionForm::create(['payload' => $data]);
 
-            return Inscription::create([
+            $inscription = Inscription::create([
                 'form_id'                   => $form->id,
                 'niveau_souhaite'           => $data['niveau_souhaite'],
                 'annee_scolaire'            => $data['annee_scolaire'],
                 'date_inscription'          => now(),
                 'statut'                    => 'pending',
-
                 // Parent
                 'nom_parent'                => $data['nom_parent'],
                 'prenom_parent'             => $data['prenom_parent'],
@@ -61,25 +64,36 @@ class InscriptionFlowService
                 'telephone_parent'          => $data['telephone_parent'],
                 'adresse_parent'            => $data['adresse_parent'] ?? null,
                 'profession_parent'         => $data['profession_parent'] ?? null,
-
                 // Enfant
                 'nom_enfant'                => $data['nom_enfant'],
                 'prenom_enfant'             => $data['prenom_enfant'],
                 'date_naissance_enfant'     => $data['date_naissance_enfant'],
                 'genre_enfant'              => $data['genre_enfant'] ?? null,
-
-                // Santé / docs (peuvent être array -> stockés tels quels dans inscriptions)
+                // Santé / docs
                 'problemes_sante'           => $data['problemes_sante'] ?? null,
                 'allergies'                 => $data['allergies'] ?? null,
                 'medicaments'               => $data['medicaments'] ?? null,
                 'documents_fournis'         => $data['documents_fournis'] ?? null,
-
                 // Urgence
                 'contact_urgence_nom'       => $data['contact_urgence_nom'] ?? null,
                 'contact_urgence_telephone' => $data['contact_urgence_telephone'] ?? null,
-
                 'remarques'                 => $data['remarques'] ?? null,
             ]);
+
+            // 🔔 Envoi de l’email ICI (avant le return)
+            try {
+                Mail::to($inscription->email_parent)
+                    // ->bcc(config('school.admin_email')) // optionnel
+                    ->send(new InscriptionReceivedMail($inscription)); // synchrone pour tester
+                    // ->queue(new InscriptionReceivedMail($inscription)); // si tu utilises une queue
+            } catch (\Throwable $e) {
+                \Log::warning('Email accusé inscription KO', [
+                    'id' => $inscription->id,
+                    'err'=> $e->getMessage()
+                ]);
+            }
+
+            return $inscription;
         });
     }
 
@@ -173,23 +187,62 @@ class InscriptionFlowService
                     'date_traitement'      => now(),
                 ]);
 
-                // Crée un paiement "virtuel" si un montant d'inscription est fourni
+                $paiement = null;
+
+                // 1) Créer le paiement d’inscription si applicable
                 if ($fraisInscription && $fraisInscription > 0) {
                     $paiement = Paiement::create([
-                        'parent_id'        => $i->parent_id ?? null,             // parent pas encore créé
+                        'parent_id'        => $i->parent_id ?? null,
                         'inscription_id'   => $i->id,
                         'montant'          => $fraisInscription,
                         'type'             => 'inscription',
                         'methode_paiement' => $this->normalizePaymentMethod($methodePaiement),
-                        'date_paiement'    => null,                              // important
+                        'date_paiement'    => null,
                         'date_echeance'    => Carbon::now()->addDays($this->echeanceJours()),
-                        'statut'           => 'en_attente',                      // en_attente | paye | expire | annule
+                        'statut'           => 'en_attente', // en_attente | paye | expire | annule
                         'remarques'        => $remarques,
                     ]);
+
+                    // 2) Token public + deeplink UNIQUEMENT si $paiement existe
+  $paiement->forceFill([
+    'public_token'            => \Illuminate\Support\Str::random(96),
+    'public_token_expires_at' => now()->addHours(config('smartkids.payment_link_ttl_hours', 48)),
+    'consumed_at'             => null,
+])->save();
+
+                  $webFallback = rtrim(config('smartkids.web_fallback_base', 'http://10.0.2.2:8000/pay'), '/')
+             . '/' . $paiement->public_token;
+
+$deeplink = rtrim(config('smartkids.deep_link_base', 'smartkids://pay'), '/')
+          . '/' . $paiement->public_token;
+
+
+                    // 3) Mail "acceptée" + bouton "Payer maintenant"
+                 try {
+  Mail::to($i->email_parent)->send(
+    new \App\Mail\InscriptionAcceptedMail($i, $paiement, $deeplink, $webFallback)
+);
+} catch (\Throwable $e) {
+    \Log::warning('Email acceptation KO', [
+        'inscription_id' => $i->id,
+        'err' => $e->getMessage()
+    ]);
+}
+        
+                } else {
+                    // Pas de paiement à créer : mail "acceptée" simple
+                    try {
+                        \Mail::to($i->email_parent)->send(
+                            new \App\Mail\InscriptionAcceptedMail($i->fresh(), null, null, null)
+                        );
+                    } catch (\Throwable $e) {
+                        \Log::warning('Email acceptation (sans paiement) KO', ['inscription_id' => $i->id, 'err' => $e->getMessage()]);
+                    }
                 }
 
-                return ['inscription' => $i->fresh(), 'paiement' => $paiement];
+                return ['inscription' => $i->fresh(), 'paiement' => $paiement?->fresh()];
             }
+
 
             // Par défaut: ne rien changer
             return ['inscription' => $i->fresh(), 'paiement' => null];
@@ -347,6 +400,7 @@ public function simulatePayById(
                         'date_paiement' => null,
                     ]);
                     $inscription->update(['statut' => 'rejected']);
+    app(\App\Services\PaymentHousekeepingService::class)->expireAndCleanup($paiement);
 
                     return [
                         'expired'     => true,
@@ -373,6 +427,8 @@ public function simulatePayById(
                     'statut'        => 'expire',
                     'date_paiement' => null,
                 ]);
+                    app(\App\Services\PaymentHousekeepingService::class)->expireAndCleanup($paiement);
+
                 $inscription->update(['statut' => 'rejected']);
                 return [
                     'expired'     => true,

@@ -26,11 +26,13 @@ class Paiement extends Model
         'remarques',
     ];
 
-    protected $casts = [
-        'montant' => 'decimal:2',
-        'date_paiement' => 'date',
-        'date_echeance' => 'date',
-    ];
+protected $casts = [
+    'montant'            => 'decimal:2',
+    'date_paiement'      => 'date',
+    'date_echeance'      => 'date',
+    'periodes_couvertes' => 'array',
+];
+
 
     public function parent()
     {
