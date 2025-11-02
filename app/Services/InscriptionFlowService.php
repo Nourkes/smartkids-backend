@@ -16,35 +16,21 @@ use Illuminate\Support\Facades\Mail;
 use App\Mail\InscriptionReceivedMail;
 use App\Mail\InscriptionAcceptedMail;
 
-/**
- * Orchestration du flux d'inscription:
- * - dépôt (public)
- * - décision admin (accepter / attente / refuser)
- * - création du paiement en base (virtuel)
- * - simulation du paiement (paye / expire / annule)
- * - finalisation (création user + parent + enfant)
- */
 class InscriptionFlowService
 {
-    /** Méthodes de paiement autorisées (selon ton schéma DB) */
     private const PAIEMENT_METHODS = ['cash', 'carte', 'en_ligne'];
 
-    /** Nb de jours avant échéance paiement (fallback: 3) */
     private function echeanceJours(): int
     {
         return (int) config('school.payment_deadline_days', 3);
     }
 
-    /** Normalise la méthode de paiement */
     private function normalizePaymentMethod(?string $m): string
     {
         $m = strtolower((string) $m);
         return in_array($m, self::PAIEMENT_METHODS, true) ? $m : 'cash';
     }
 
-    /**
-     * Dépôt public d'une demande d'inscription.
-     */
     public function create(array $data): Inscription
     {
         return DB::transaction(function () use ($data) {
@@ -57,35 +43,28 @@ class InscriptionFlowService
                 'annee_scolaire'            => $data['annee_scolaire'],
                 'date_inscription'          => now(),
                 'statut'                    => 'pending',
-                // Parent
                 'nom_parent'                => $data['nom_parent'],
                 'prenom_parent'             => $data['prenom_parent'],
                 'email_parent'              => $data['email_parent'],
                 'telephone_parent'          => $data['telephone_parent'],
                 'adresse_parent'            => $data['adresse_parent'] ?? null,
                 'profession_parent'         => $data['profession_parent'] ?? null,
-                // Enfant
                 'nom_enfant'                => $data['nom_enfant'],
                 'prenom_enfant'             => $data['prenom_enfant'],
                 'date_naissance_enfant'     => $data['date_naissance_enfant'],
                 'genre_enfant'              => $data['genre_enfant'] ?? null,
-                // Santé / docs
                 'problemes_sante'           => $data['problemes_sante'] ?? null,
                 'allergies'                 => $data['allergies'] ?? null,
                 'medicaments'               => $data['medicaments'] ?? null,
                 'documents_fournis'         => $data['documents_fournis'] ?? null,
-                // Urgence
                 'contact_urgence_nom'       => $data['contact_urgence_nom'] ?? null,
                 'contact_urgence_telephone' => $data['contact_urgence_telephone'] ?? null,
                 'remarques'                 => $data['remarques'] ?? null,
             ]);
 
-            // 🔔 Envoi de l’email ICI (avant le return)
             try {
                 Mail::to($inscription->email_parent)
-                    // ->bcc(config('school.admin_email')) // optionnel
-                    ->send(new InscriptionReceivedMail($inscription)); // synchrone pour tester
-                    // ->queue(new InscriptionReceivedMail($inscription)); // si tu utilises une queue
+                    ->send(new InscriptionReceivedMail($inscription));
             } catch (\Throwable $e) {
                 \Log::warning('Email accusé inscription KO', [
                     'id' => $inscription->id,
@@ -97,55 +76,39 @@ class InscriptionFlowService
         });
     }
 
-    /** Wrappers pratiques (alias des routes /accept, /wait, /reject) */
     public function accept(
         Inscription $i,
         ?int $classeId,
         int $adminId,
-        ?float $fraisInscription = null,
-        ?float $fraisMensuel = null,
-        ?string $remarques = null,
-        string $methodePaiement = 'cash'
+        ?string $remarques = null
     ): array {
-        return $this->decide(
-            $i,
-            'accepter',
-            $classeId,
-            $adminId,
-            $fraisInscription,
-            $fraisMensuel,
-            $remarques,
-            $methodePaiement
-        );
+        return $this->decide($i, 'accepter', $classeId, $adminId, $remarques);
     }
 
     public function wait(Inscription $i, int $adminId, ?string $remarques = null): array
     {
-        return $this->decide($i, 'mettre_en_attente', null, $adminId, null, null, $remarques);
+        return $this->decide($i, 'mettre_en_attente', null, $adminId, $remarques);
     }
 
     public function reject(Inscription $i, int $adminId, ?string $remarques = null): array
     {
-        return $this->decide($i, 'refuser', null, $adminId, null, null, $remarques);
+        return $this->decide($i, 'refuser', null, $adminId, $remarques);
     }
 
     /**
-     * Décision admin.
-     * Retour: ['inscription' => Inscription, 'paiement' => ?Paiement]
+     * Décision admin
+     * 🔥 Si accepté : crée paiement 1er mois SANS montant fixe (calculé au paiement)
      */
     public function decide(
         Inscription $i,
-        string $action,                    // 'accepter' | 'mettre_en_attente' | 'refuser'
+        string $action,
         ?int $classeId,
         int $adminId,
-        ?float $fraisInscription = null,
-        ?float $fraisMensuel = null,       // conservé pour évolutivité
-        ?string $remarques = null,
-        string $methodePaiement = 'cash'
+        ?string $remarques = null
     ): array {
         $paiement = null;
 
-        return DB::transaction(function () use (&$paiement, $i, $action, $classeId, $adminId, $fraisInscription, $remarques, $methodePaiement) {
+        return DB::transaction(function () use (&$paiement, $i, $action, $classeId, $adminId, $remarques) {
 
             // REFUSER
             if ($action === 'refuser') {
@@ -187,69 +150,69 @@ class InscriptionFlowService
                     'date_traitement'      => now(),
                 ]);
 
-                $paiement = null;
+                // 🔥 Créer paiement 1er mois SANS montant (calculé dynamiquement)
+                $dateEcheance = Carbon::now()->addDays($this->echeanceJours());
+                
+                $paiement = Paiement::create([
+                    'parent_id'          => null,
+                    'inscription_id'     => $i->id,
+                    'montant'            => 0, // 🔥 Sera calculé au moment du paiement
+                    'type'               => 'inscription',
+                    'plan'               => 'mensuel',
+                    'periodes_couvertes' => null, // 🔥 Défini au paiement
+                    'methode_paiement'   => 'en_ligne',
+                    'date_paiement'      => null,
+                    'date_echeance'      => $dateEcheance,
+                    'statut'             => 'en_attente',
+                    'remarques'          => $remarques,
+                ]);
 
-                // 1) Créer le paiement d’inscription si applicable
-                if ($fraisInscription && $fraisInscription > 0) {
-                    $paiement = Paiement::create([
-                        'parent_id'        => $i->parent_id ?? null,
-                        'inscription_id'   => $i->id,
-                        'montant'          => $fraisInscription,
-                        'type'             => 'inscription',
-                        'methode_paiement' => $this->normalizePaymentMethod($methodePaiement),
-                        'date_paiement'    => null,
-                        'date_echeance'    => Carbon::now()->addDays($this->echeanceJours()),
-                        'statut'           => 'en_attente', // en_attente | paye | expire | annule
-                        'remarques'        => $remarques,
-                    ]);
+                // Token public avec deadline
+                $paiement->forceFill([
+                    'public_token'            => Str::random(96),
+                    'public_token_expires_at' => $dateEcheance,
+                    'consumed_at'             => null,
+                ])->save();
 
-                    // 2) Token public + deeplink UNIQUEMENT si $paiement existe
-  $paiement->forceFill([
-    'public_token'            => \Illuminate\Support\Str::random(96),
-    'public_token_expires_at' => now()->addHours(config('smartkids.payment_link_ttl_hours', 48)),
-    'consumed_at'             => null,
-])->save();
+                // Liens
+// Liens (BACK UNIQUEMENT)
+$apiBase = rtrim(config('smartkids.api_base', 'http://10.0.2.2:8000/api'), '/');
 
-                  $webFallback = rtrim(config('smartkids.web_fallback_base', 'http://10.0.2.2:8000/pay'), '/')
+// URLs publiques pour l’écran de paiement
+$quoteUrl   = $apiBase . '/public/payments/' . $paiement->public_token . '/quote';
+$confirmUrl = $apiBase . '/public/payments/' . $paiement->public_token . '/confirm';
+
+// Deep-link AU FORMAT ATTENDU (query params 'quote' et 'confirm')
+$deepBase = rtrim(config('smartkids.deep_link_base', 'smartkids://pay'), '/');
+$deeplink = $deepBase . '?' . http_build_query([
+    'quote'   => $quoteUrl,
+    'confirm' => $confirmUrl,
+], '', '&', PHP_QUERY_RFC3986);
+
+// Fallback Web (facultatif)
+$webFallback = rtrim(config('smartkids.web_fallback_base', 'http://10.0.2.2:8000/pay'), '/')
              . '/' . $paiement->public_token;
 
-$deeplink = rtrim(config('smartkids.deep_link_base', 'smartkids://pay'), '/')
-          . '/' . $paiement->public_token;
 
-
-                    // 3) Mail "acceptée" + bouton "Payer maintenant"
-                 try {
-  Mail::to($i->email_parent)->send(
-    new \App\Mail\InscriptionAcceptedMail($i, $paiement, $deeplink, $webFallback)
-);
-} catch (\Throwable $e) {
-    \Log::warning('Email acceptation KO', [
-        'inscription_id' => $i->id,
-        'err' => $e->getMessage()
-    ]);
-}
-        
-                } else {
-                    // Pas de paiement à créer : mail "acceptée" simple
-                    try {
-                        \Mail::to($i->email_parent)->send(
-                            new \App\Mail\InscriptionAcceptedMail($i->fresh(), null, null, null)
-                        );
-                    } catch (\Throwable $e) {
-                        \Log::warning('Email acceptation (sans paiement) KO', ['inscription_id' => $i->id, 'err' => $e->getMessage()]);
-                    }
+                // Email avec lien + deadline
+                try {
+                    Mail::to($i->email_parent)->send(
+                        new \App\Mail\FirstMonthPaymentMail($i, $paiement, $deeplink, $webFallback)
+                    );
+                } catch (\Throwable $e) {
+                    \Log::warning('Email paiement 1er mois KO', [
+                        'inscription_id' => $i->id,
+                        'err' => $e->getMessage()
+                    ]);
                 }
 
-                return ['inscription' => $i->fresh(), 'paiement' => $paiement?->fresh()];
+                return ['inscription' => $i->fresh(), 'paiement' => $paiement->fresh()];
             }
 
-
-            // Par défaut: ne rien changer
             return ['inscription' => $i->fresh(), 'paiement' => null];
         });
     }
 
-    /** Prochaine position de file d'attente pour un niveau/année. */
     private function nextQueuePosition(string $niveau, string $annee): int
     {
         $max = Inscription::where('statut', 'waiting')
@@ -261,204 +224,255 @@ $deeplink = rtrim(config('smartkids.deep_link_base', 'smartkids://pay'), '/')
     }
 
     /**
-     * Finalise après paiement:
-     * - crée User (role parent si dispo), ParentModel, Enfant
-     * - lie parent/enfant
-     * - met à jour inscription & paiement
-     * Retour: ['user'=>User,'parent'=>ParentModel,'enfant'=>Enfant]
+     * Finalise après paiement 1er mois
+     * 🔥 Calcule le montant au moment du paiement (pas avant)
      */
-    private function finalizeAfterPayment(Inscription $i, Paiement $p): array
+   public function finalizeAfterFirstMonthPayment(Inscription $i, Paiement $p): array
 {
-    return DB::transaction(function () use ($i, $p) {
+    try {
+        return DB::transaction(function () use ($i, $p) {
+            
+            // 🔥 Calculer le montant
+            $paymentService = app(\App\Services\PaymentService::class);
+            $quote = $paymentService->quoteFirstMonthProrata($i, now());
 
-        // 1) USER (login)
-        $passwordPlain = Str::password(10);
+            $p->update([
+                'montant'            => $quote['montant_du'],
+                'periodes_couvertes' => [$quote['periode_index']],
+            ]);
 
-        // On met à jour si l'email existe déjà
-        $user = User::updateOrCreate(
-            ['email' => $i->email_parent],
-            [
-                'name'     => trim($i->prenom_parent.' '.$i->nom_parent),
-                'password' => Hash::make($passwordPlain),
-                // Si ta table users a une colonne 'role', on force 'parent'
-                // (sinon commente ces 2 lignes)
-                'role'     => 'parent',
-            ]
-        );
+            // 1) Normaliser l'email
+            $emailNormalized = strtolower(trim($i->email_parent));
+            
+            if (!filter_var($emailNormalized, FILTER_VALIDATE_EMAIL)) {
+                throw new \Exception("Email invalide : {$i->email_parent}");
+            }
 
-        // Si tu utilises Spatie, on s'assure que le rôle "parent" est associé
-        if (method_exists($user, 'assignRole')) {
-            try { $user->syncRoles(['parent']); } catch (\Throwable $e) {}
-        }
+            $passwordPlain = Str::password(10);
 
-        // 2) PROFIL PARENT (on met à jour à chaque fois)
-        $parent = ParentModel::updateOrCreate(
-            ['user_id' => $user->id],
-            [
-                'telephone'                 => $i->telephone_parent,
-                'adresse'                   => $i->adresse_parent,
-                'profession'                => $i->profession_parent,
-                'contact_urgence_nom'       => $i->contact_urgence_nom,
-                'contact_urgence_telephone' => $i->contact_urgence_telephone,
-            ]
-        );
+            // 2) Créer User
+            \Log::info('🔵 Création User', ['email' => $emailNormalized]);
+            
+            $user = User::updateOrCreate(
+                ['email' => $emailNormalized],
+                [
+                    'name'                 => trim($i->prenom_parent . ' ' . $i->nom_parent),
+                    'password'             => Hash::make($passwordPlain),
+                    'role'                 => 'parent',
+                    'must_change_password' => true, // ✅ Forcer le changement
+                ]
+            );
 
-        // 3) ENFANT
-        // Ton enum pour 'sexe' est ('garçon','fille'), donc on mappe M/F
-        $sexe = $i->genre_enfant === 'M' ? 'garçon' : ($i->genre_enfant === 'F' ? 'fille' : null);
+            if (!$user || !$user->id) {
+                throw new \Exception("❌ User non créé pour : {$emailNormalized}");
+            }
 
-        // Normalisation champs TEXT (DB) depuis JSON (inscription)
-        $allergies    = $i->allergies ? (is_array($i->allergies) ? implode(',', $i->allergies) : (string)$i->allergies) : null;
-        $remarquesMed = $i->problemes_sante ? (is_array($i->problemes_sante) ? implode(', ', $i->problemes_sante) : (string)$i->problemes_sante) : null;
+            \Log::info('✅ User créé', [
+                'user_id' => $user->id,
+                'wasRecentlyCreated' => $user->wasRecentlyCreated
+            ]);
 
-        $enfant = Enfant::updateOrCreate(
-            [
-                'nom'             => $i->nom_enfant,
-                'prenom'          => $i->prenom_enfant,
-                'date_naissance'  => $i->date_naissance_enfant,
-            ],
-            [
-                'sexe'                 => $sexe,              // 'garçon' | 'fille' | null
-                'classe_id'            => $i->classe_id,
-                'allergies'            => $allergies,         // TEXT
-                'remarques_medicales'  => $remarquesMed,      // TEXT
-            ]
-        );
+            // 3) Assigner rôle Spatie
+            try { 
+                $user->syncRoles(['parent']); 
+                \Log::info('✅ Rôle assigné', ['user_id' => $user->id]);
+            } catch (\Throwable $e) {
+                \Log::warning('⚠️ Rôle non assigné', [
+                    'user_id' => $user->id,
+                    'error' => $e->getMessage()
+                ]);
+            }
 
-        // Lier parent ↔ enfant (pivot)
-        $parent->enfants()->syncWithoutDetaching([$enfant->id]);
+            // 4) Créer Parent
+            \Log::info('🔵 Création Parent', ['user_id' => $user->id]);
+            
+            $parent = ParentModel::updateOrCreate(
+                ['user_id' => $user->id],
+                [
+                    'telephone'                 => $i->telephone_parent,
+                    'adresse'                   => $i->adresse_parent,
+                    'profession'                => $i->profession_parent,
+                    'contact_urgence_nom'       => $i->contact_urgence_nom,
+                    'contact_urgence_telephone' => $i->contact_urgence_telephone,
+                ]
+            );
 
-        // 4) Marquer l’inscription comme confirmée et pointer le parent
-        $i->update([
-            'parent_id'       => $parent->id,
-            'statut'          => 'accepted',
-            'date_traitement' => now(),
+            \Log::info('✅ Parent créé', ['parent_id' => $parent->id]);
+
+            // 5) Créer Enfant
+            $sexe = $i->genre_enfant === 'M' ? 'garçon' : ($i->genre_enfant === 'F' ? 'fille' : null);
+            $allergies = $i->allergies ? (is_array($i->allergies) ? implode(',', $i->allergies) : (string)$i->allergies) : null;
+            $remarquesMed = $i->problemes_sante ? (is_array($i->problemes_sante) ? implode(', ', $i->problemes_sante) : (string)$i->problemes_sante) : null;
+
+            \Log::info('🔵 Création Enfant', [
+                'nom' => $i->nom_enfant,
+                'prenom' => $i->prenom_enfant
+            ]);
+
+            $enfant = Enfant::updateOrCreate(
+                [
+                    'nom'            => $i->nom_enfant,
+                    'prenom'         => $i->prenom_enfant,
+                    'date_naissance' => $i->date_naissance_enfant,
+                ],
+                [
+                    'sexe'                => $sexe,
+                    'classe_id'           => $i->classe_id,
+                    'allergies'           => $allergies,
+                    'remarques_medicales' => $remarquesMed,
+                ]
+            );
+
+            \Log::info('✅ Enfant créé', ['enfant_id' => $enfant->id]);
+
+            // 6) Lier enfant au parent
+            $parent->enfants()->syncWithoutDetaching([$enfant->id]);
+
+            // 7) Mettre à jour inscription
+            $i->update([
+                'parent_id'       => $parent->id,
+                'statut'          => 'accepted',
+                'date_traitement' => now(),
+            ]);
+
+            // 8) Mettre à jour paiement
+            $p->update([
+                'parent_id'     => $parent->id,
+                'date_paiement' => now(),
+                'statut'        => 'paye',
+            ]);
+
+            \Log::info('✅ Transaction complète', [
+                'user_id' => $user->id,
+                'parent_id' => $parent->id,
+                'enfant_id' => $enfant->id
+            ]);
+
+            // 9) Envoyer email (HORS transaction si possible)
+            try {
+                Mail::to($user->email)->send(
+                    new \App\Mail\TempPasswordMail($user->name, $user->email, $passwordPlain)
+                );
+                \Log::info('✅ Email envoyé', ['email' => $user->email]);
+            } catch (\Throwable $e) {
+                \Log::error('❌ Email non envoyé', [
+                    'user_id' => $user->id,
+                    'error' => $e->getMessage()
+                ]);
+            }
+
+            return compact('user', 'parent', 'enfant', 'quote');
+        });
+        
+    } catch (\Throwable $e) {
+        \Log::error('❌ ERREUR TRANSACTION', [
+            'message' => $e->getMessage(),
+            'file' => $e->getFile(),
+            'line' => $e->getLine(),
+            'trace' => $e->getTraceAsString()
         ]);
-
-        // 5) Compléter le paiement
-        $p->update([
-            'parent_id'      => $parent->id,
-            'date_paiement'  => now(),
-            'statut'         => 'paye',
-        ]);
-
-        // (Optionnel) envoyer un email avec $passwordPlain
-
-        return compact('user','parent','enfant');
-    });
+        throw $e;
+    }
 }
-
     /**
-     * Simulation de paiement par ID (publique ou protégée selon ta route).
-     * $action: 'paye' | 'expire' | 'annule'
-     *
-     * Retour:
-     *  - si payé: ['expired'=>false, 'paiement'=>Paiement, 'inscription'=>Inscription, 'user'=>User, 'parent'=>ParentModel, 'enfant'=>Enfant]
-     *  - sinon:   ['expired'=>bool,  'paiement'=>Paiement, 'inscription'=>Inscription]
+     * Simulation de paiement
      */
-   // app/Services/InscriptionFlowService.php
+    public function simulatePayById(
+        int $paiementId,
+        string $action,
+        ?string $methode = null,
+        ?float $montant = null,
+        ?string $reference = null,
+        ?string $remarques = null
+    ): array {
+        return DB::transaction(function () use ($paiementId, $action, $methode, $montant, $reference, $remarques) {
 
-public function simulatePayById(
-    int $paiementId,
-    string $action,
-    ?string $methode = null,
-    ?float $montant = null,
-    ?string $reference = null,
-    ?string $remarques = null
-): array {
-    return DB::transaction(function () use ($paiementId, $action, $methode, $montant, $reference, $remarques) {
+            $paiement    = Paiement::lockForUpdate()->findOrFail($paiementId);
+            $inscription = $paiement->inscription()->lockForUpdate()->firstOrFail();
 
-        /** @var Paiement $paiement */
-        $paiement   = Paiement::lockForUpdate()->findOrFail($paiementId);
-        $inscription= $paiement->inscription()->lockForUpdate()->firstOrFail();
+            $paiement->update([
+                'methode_paiement'      => $methode ?? $paiement->methode_paiement,
+                'reference_transaction' => $reference ?? $paiement->reference_transaction,
+                'remarques'             => $remarques ?? $paiement->remarques,
+            ]);
 
-        // MAJ champs communs
-        $paiement->update([
-            'methode_paiement'      => $methode ?? $paiement->methode_paiement,
-            'reference_transaction' => $reference ?? $paiement->reference_transaction,
-            'remarques'             => $remarques ?? $paiement->remarques,
-            // 'montant'            => $montant ?? $paiement->montant, // si tu veux
-        ]);
+            $isExpired = false;
+            if ($paiement->date_echeance) {
+                $isExpired = Carbon::parse($paiement->date_echeance)
+                    ->endOfDay()
+                    ->lt(Carbon::now());
+            }
 
-        // 👉 Calcul d’expiration : on considère le jour entier de l’échéance
-        $isExpired = false;
-        if ($paiement->date_echeance) {
-            $isExpired = Carbon::parse($paiement->date_echeance)
-                ->endOfDay()
-                ->lt(Carbon::now());
-        }
+            switch (strtolower($action)) {
 
-        switch (strtolower($action)) {
+                case 'paye':
+                case 'payé':
+                case 'paid':
+                    if ($isExpired) {
+                        $paiement->update([
+                            'statut'        => 'expire',
+                            'date_paiement' => null,
+                        ]);
+                        $inscription->update(['statut' => 'rejected']);
+                        app(\App\Services\PaymentHousekeepingService::class)->expireAndCleanup($paiement);
 
-            case 'paye':
-            case 'payé':
-            case 'paid':
-                // ⛔️ Si expiré, on refuse le paiement et on rejette l’inscription
-                if ($isExpired) {
+                        return [
+                            'expired'     => true,
+                            'paiement'    => $paiement->fresh(),
+                            'inscription' => $inscription->fresh(),
+                        ];
+                    }
+
+                    // ✅ Finalisation avec calcul dynamique du montant
+                    $created = $this->finalizeAfterFirstMonthPayment($inscription, $paiement);
+
+                    return [
+                        'expired'     => false,
+                        'paiement'    => $paiement->fresh(),
+                        'inscription' => $inscription->fresh(),
+                        'user'        => $created['user'],
+                        'parent'      => $created['parent'],
+                        'enfant'      => $created['enfant'],
+                        'quote'       => $created['quote'], // 🔥 Info sur le montant calculé
+                    ];
+
+                case 'expire':
+                case 'expired':
                     $paiement->update([
                         'statut'        => 'expire',
                         'date_paiement' => null,
                     ]);
+                    app(\App\Services\PaymentHousekeepingService::class)->expireAndCleanup($paiement);
                     $inscription->update(['statut' => 'rejected']);
-    app(\App\Services\PaymentHousekeepingService::class)->expireAndCleanup($paiement);
-
+                    
                     return [
                         'expired'     => true,
                         'paiement'    => $paiement->fresh(),
                         'inscription' => $inscription->fresh(),
                     ];
-                }
 
-                // ✅ Finalisation (création User/Parent/Enfant + marquer payé)
-                $created = $this->finalizeAfterPayment($inscription, $paiement);
+                case 'annule':
+                case 'canceled':
+                case 'cancelled':
+                    $paiement->update([
+                        'statut'        => 'annule',
+                        'date_paiement' => null,
+                    ]);
+                    $inscription->update(['statut' => 'rejected']);
+                    
+                    return [
+                        'expired'     => false,
+                        'paiement'    => $paiement->fresh(),
+                        'inscription' => $inscription->fresh(),
+                    ];
 
-                return [
-                    'expired'     => false,
-                    'paiement'    => $paiement->fresh(),
-                    'inscription' => $inscription->fresh(),
-                    'user'        => $created['user'],
-                    'parent'      => $created['parent'],
-                    'enfant'      => $created['enfant'],
-                ];
-
-            case 'expire':
-            case 'expired':
-                $paiement->update([
-                    'statut'        => 'expire',
-                    'date_paiement' => null,
-                ]);
-                    app(\App\Services\PaymentHousekeepingService::class)->expireAndCleanup($paiement);
-
-                $inscription->update(['statut' => 'rejected']);
-                return [
-                    'expired'     => true,
-                    'paiement'    => $paiement->fresh(),
-                    'inscription' => $inscription->fresh(),
-                ];
-
-            case 'annule':
-            case 'canceled':
-            case 'cancelled':
-                $paiement->update([
-                    'statut'        => 'annule',
-                    'date_paiement' => null,
-                ]);
-                // à toi de décider : ici on rejette aussi
-                $inscription->update(['statut' => 'rejected']);
-                return [
-                    'expired'     => false,
-                    'paiement'    => $paiement->fresh(),
-                    'inscription' => $inscription->fresh(),
-                ];
-
-            default:
-                return [
-                    'expired'     => $isExpired,
-                    'paiement'    => $paiement->fresh(),
-                    'inscription' => $inscription->fresh(),
-                ];
-        }
-    });
-}
-
+                default:
+                    return [
+                        'expired'     => $isExpired,
+                        'paiement'    => $paiement->fresh(),
+                        'inscription' => $inscription->fresh(),
+                    ];
+            }
+        });
+    }
 }

@@ -218,9 +218,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get   ('/activites/disponibles',                        [ActiviteParentController::class, 'activitesDisponibles']);
         Route::post  ('/activites/{activite}/participer',              [ActiviteParticipationController::class, 'participer']);
         Route::delete('/activites/{activite}/participations/{enfant}', [ActiviteParticipationController::class, 'annuler']);
-         Route::get ('/inscriptions/{inscription}/first-month/quote',   [PaymentQuotesController::class, 'firstMonthQuote']);
-    Route::post('/inscriptions/{inscription}/first-month/confirm', [PaymentQuotesController::class, 'firstMonthConfirm']);
-
+       
     
     });
     
@@ -234,9 +232,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
 Route::middleware(['auth:sanctum','role:admin'])->group(function () {
     // Paiement scolarité — devis + création
-    Route::get ('/inscriptions/{inscription}/first-month/quote',   [PaymentQuotesController::class, 'firstMonthQuote']);
-    Route::post('/inscriptions/{inscription}/first-month/confirm', [PaymentQuotesController::class, 'firstMonthConfirm']);
-
+  
     Route::get ('/inscriptions/{inscription}/monthly/quote',       [PaymentQuotesController::class, 'monthlyQuote']);
     Route::post('/inscriptions/{inscription}/monthly/create',      [PaymentQuotesController::class, 'monthlyCreate']);
 });
