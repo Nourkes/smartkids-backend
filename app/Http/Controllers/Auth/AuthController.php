@@ -49,43 +49,42 @@ class AuthController extends Controller
     }
 
     public function login(Request $request)
-    {
-        // Validation
-        $request->validate([
-            'email' => 'required|email',
-            'password' => 'required',
-        ]);
+{
+    $request->validate([
+        'email' => 'required|email',
+        'password' => 'required',
+    ]);
 
-        // Tentative d'authentification
-        if (!Auth::attempt($request->only('email', 'password'))) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Identifiants invalides'
-            ], 401);
-        }
-
-        /** @var \App\Models\User $user */
-        $user = Auth::user();
-        $token = $user->createToken('auth_token')->plainTextToken;
-
-        // Flag "premier login" via Cache (pas de colonne DB)
-        $mustChange = (bool) Cache::get("first_login:{$user->id}:force", false);
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Connexion réussie',
-            'token' => $token,
-            'token_type' => 'Bearer',
-            'user' => [
-                'id' => $user->id,
-                'name' => $user->name,
-                'email' => $user->email,
-                'role' => $user->role,
-                'must_change_password' => $mustChange,
-            ],
-            'force_password_change' => $user->must_change_password,
-        ], 200);
+    if (!Auth::attempt($request->only('email', 'password'))) {
+        return response()->json(['success' => false, 'message' => 'Identifiants invalides'], 401);
     }
+
+    /** @var \App\Models\User $user */
+    $user = Auth::user();
+    $token = $user->createToken('auth_token')->plainTextToken;
+
+    // ✅ Si la BD dit qu’il doit changer le mot de passe, on arme le flag cache
+    if ($user->must_change_password) {
+        Cache::put("first_login:{$user->id}:force", true, now()->addMinutes(30));
+    }
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Connexion réussie',
+        'token'   => $token,
+        'token_type' => 'Bearer',
+        'user' => [
+            'id'    => $user->id,
+            'name'  => $user->name,
+            'email' => $user->email,
+            'role'  => $user->role,
+            'must_change_password' => (bool)$user->must_change_password,
+        ],
+        // ⚠️ aligne ces 2 champs avec la même vérité
+        'force_password_change' => (bool)$user->must_change_password,
+    ], 200);
+}
+
   // ====== 1) envoyer le code par email ======
    public function sendFirstLoginCode(Request $request)
 {
@@ -151,29 +150,41 @@ class AuthController extends Controller
 
     // ====== 3) définir le nouveau mot de passe ======
     public function resetFirstLoginPassword(Request $request)
-    {
-        $request->validate([
-            'new_password' => 'required|string|min:8|confirmed'
-        ]);
-        $user = $request->user();
+{
+    $request->validate([
+        'new_password' => 'required|string|min:8|confirmed' // => exige aussi new_password_confirmation
+    ]);
 
-        if (!Cache::get("first_login:{$user->id}:force", false)) {
-            return response()->json(['message' => 'Aucun changement requis'], 400);
-        }
-        if (!Cache::get("first_login:{$user->id}:verified", false)) {
-            return response()->json(['message' => 'Veuillez vérifier le code d’abord'], 422);
-        }
+    /** @var \App\Models\User $user */
+    $user = $request->user();
 
-        $user->password = Hash::make($request->new_password);
-        $user->save();
-
-        // Nettoyer flags
-        Cache::forget("first_login:{$user->id}:force");
-        Cache::forget("first_login:{$user->id}:code");
-        Cache::forget("first_login:{$user->id}:verified");
-
-        return response()->json(['message' => 'Mot de passe mis à jour.']);
+    // Le reset ne doit être permis que si la vérification 1er login est requise + faite
+    if (!Cache::get("first_login:{$user->id}:force", false)) {
+        return response()->json(['message' => 'Aucun changement requis'], 400);
     }
+    if (!Cache::get("first_login:{$user->id}:verified", false)) {
+        return response()->json(['message' => 'Veuillez vérifier le code d’abord'], 422);
+    }
+
+    // ⚠️ Si tu as `$casts = ['password' => 'hashed']` dans User, ne PAS re-Hasher.
+    $user->password = Hash::make($request->new_password); // ou $request->new_password si 'hashed' dans $casts
+
+    // ✅ couper le flag BD
+    $user->must_change_password = false;
+    $user->save();
+
+    // (optionnel) recharger + log
+    $user->refresh();
+    \Log::info('Password reset OK', ['user_id' => $user->id, 'must_change_password' => $user->must_change_password]);
+
+    // ✅ nettoyer le cache "first_login"
+    Cache::forget("first_login:{$user->id}:force");
+    Cache::forget("first_login:{$user->id}:code");
+    Cache::forget("first_login:{$user->id}:verified");
+
+    return response()->json(['message' => 'Mot de passe mis à jour.']);
+}
+
 
     /**
      * Déconnexion utilisateur
