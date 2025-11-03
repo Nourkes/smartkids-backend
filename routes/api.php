@@ -17,7 +17,7 @@ use App\Http\Controllers\Admin\EmploiTemplateController;
 use App\Http\Controllers\Admin\EmploiBatchController;
 use App\Http\Controllers\Admin\MatiereController;
 use App\Http\Controllers\Admin\InscriptionAdminController;
-
+use App\Http\Controllers\Parent\ActivitePaymentController;
 use App\Http\Controllers\Educateur\GradeController as EduGradeController;
 use App\Http\Controllers\Educateur\EducateurEmploiController;
 use App\Http\Controllers\Educateur\PresenceController as EducateurPresenceController;
@@ -218,6 +218,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get   ('/activites/disponibles',                        [ActiviteParentController::class, 'activitesDisponibles']);
         Route::post  ('/activites/{activite}/participer',              [ActiviteParticipationController::class, 'participer']);
         Route::delete('/activites/{activite}/participations/{enfant}', [ActiviteParticipationController::class, 'annuler']);
+        Route::get ('/activites/{activite}/payment/quote',   [ActivitePaymentController::class, 'quote']);
+        Route::post('/activites/{activite}/payment/confirm', [ActivitePaymentController::class, 'confirm']);
        
     
     });
