@@ -1,0 +1,79 @@
+<?php
+// app/Http/Requests/SearchClasseRequest.php
+
+namespace App\Http\Requests;
+
+use Illuminate\Foundation\Http\FormRequest;
+
+class SearchClasseRequest extends FormRequest
+{
+    public function authorize()
+    {
+        return auth()->user() && in_array(auth()->user()->role, ['admin', 'educateur']);
+    }
+
+    public function rules()
+    {
+        return [
+            'term' => 'required|string|min:2|max:255',
+            'filters' => 'array',
+            'filters.niveau' => 'string|max:100',
+            'filters.capacite_min' => 'integer|min:1',
+            'filters.capacite_max' => 'integer|max:50',
+            'filters.has_educateurs' => 'boolean',
+            'filters.est_complete' => 'boolean',
+            'filters.taux_occupation_min' => 'integer|min:0|max:100',
+            'filters.taux_occupation_max' => 'integer|min:0|max:100',
+            'sort_by' => 'in:nom,niveau,capacite_max,created_at',
+            'sort_order' => 'in:asc,desc',
+            'per_page' => 'integer|min:5|max:100'
+        ];
+    }
+
+    public function messages()
+    {
+        return [
+            'term.required' => 'Le terme de recherche est obligatoire.',
+            'term.min' => 'Le terme de recherche doit contenir au moins 2 caractères.',
+            'term.max' => 'Le terme de recherche ne peut pas dépasser 255 caractères.',
+            'filters.array' => 'Les filtres doivent être un tableau.',
+            'filters.niveau.max' => 'Le niveau ne peut pas dépasser 100 caractères.',
+            'filters.capacite_min.min' => 'La capacité minimale doit être d\'au moins 1.',
+            'filters.capacite_max.max' => 'La capacité maximale ne peut pas dépasser 50.',
+            'filters.has_educateurs.boolean' => 'Le filtre "avec éducateurs" doit être vrai ou faux.',
+            'filters.est_complete.boolean' => 'Le filtre "classe complète" doit être vrai ou faux.',
+            'filters.taux_occupation_min.between' => 'Le taux d\'occupation minimum doit être entre 0 et 100.',
+            'filters.taux_occupation_max.between' => 'Le taux d\'occupation maximum doit être entre 0 et 100.',
+            'sort_by.in' => 'Le critère de tri n\'est pas valide.',
+            'sort_order.in' => 'L\'ordre de tri doit être "asc" ou "desc".',
+            'per_page.between' => 'Le nombre d\'éléments par page doit être entre 5 et 100.'
+        ];
+    }
+
+    public function withValidator($validator)
+    {
+        $validator->after(function ($validator) {
+            $filters = $this->input('filters', []);
+            
+            // Vérifier que taux_occupation_min <= taux_occupation_max
+            if (isset($filters['taux_occupation_min']) && isset($filters['taux_occupation_max'])) {
+                if ($filters['taux_occupation_min'] > $filters['taux_occupation_max']) {
+                    $validator->errors()->add(
+                        'filters.taux_occupation_min',
+                        'Le taux d\'occupation minimum ne peut pas être supérieur au maximum.'
+                    );
+                }
+            }
+            
+            // Vérifier que capacite_min <= capacite_max
+            if (isset($filters['capacite_min']) && isset($filters['capacite_max'])) {
+                if ($filters['capacite_min'] > $filters['capacite_max']) {
+                    $validator->errors()->add(
+                        'filters.capacite_min',
+                        'La capacité minimum ne peut pas être supérieure à la capacité maximum.'
+                    );
+                }
+            }
+        });
+    }
+}
