@@ -10,7 +10,7 @@ use Laravel\Sanctum\HasApiTokens;
 use Spatie\Permission\Traits\HasRoles;
 class User extends Authenticatable
 {
-    use HasFactory, Notifiable, HasApiTokens,HasRoles;
+    use HasFactory, Notifiable, HasApiTokens, HasRoles;
 
     protected $fillable = [
         'name',
@@ -30,7 +30,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
-             'must_change_password' => 'boolean',
+            'must_change_password' => 'boolean',
         ];
     }
 
@@ -48,6 +48,17 @@ class User extends Authenticatable
     public function parent()
     {
         return $this->hasOne(ParentModel::class);
+    }
+
+    // Relations avec les notifications
+    public function notifications()
+    {
+        return $this->hasMany(Notification::class, 'user_id');
+    }
+
+    public function notificationsEnvoyees()
+    {
+        return $this->hasMany(Notification::class, 'sender_id');
     }
 
     // Méthodes utilitaires
@@ -81,7 +92,7 @@ class User extends Authenticatable
         }
     }
     public function getNomCompletAttribute()
-{
-    return $this->name; // ou une autre logique
-}
+    {
+        return $this->name; // ou une autre logique
+    }
 }

@@ -1,0 +1,205 @@
+@startuml SmartKids Class Diagram
+
+' Configuration
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+
+' ========== Core Users ==========
+class User {
+  +String name
+  +String email
+  +String role
+}
+
+class Admin {
+  +String poste
+}
+
+class Educateur {
+  +String diplome
+  +Date date_embauche
+}
+
+class ParentModel {
+  +String telephone
+}
+
+class Enfant {
+  +String nom
+  +String prenom
+  +Date date_naissance
+}
+
+' Inheritance
+User <|-- Admin
+User <|-- Educateur
+User <|-- ParentModel
+
+' ========== Academic ==========
+class Classe {
+  +String nom
+  +String niveau
+}
+
+class Matiere {
+  +String nom
+}
+
+class Salle {
+  +String nom
+}
+
+' ========== Activities ==========
+class Activite {
+  +String nom
+  +String type
+}
+
+class Presence {
+  +Date date_presence
+  +String statut
+}
+
+' ========== Association Classes ==========
+class SuivieNote <<association>> {
+  +Float note
+  +String type_evaluation
+  +Date date_evaluation
+  +String trimestre
+  +String commentaire
+}
+
+class Grade <<association>> {
+  +String grade
+  +String remark
+  +String school_year
+  +String term
+}
+
+class ParticipationActivite <<association>> {
+  +String statut_participation
+  +String remarques
+  +Float note_evaluation
+}
+
+class ChatParticipant <<association>> {
+  +String role
+  +DateTime last_read_at
+}
+
+class EmploiTemplateSlot <<association>> {
+  +String jour_semaine
+  +Time debut
+  +Time fin
+  +String status
+}
+
+' ========== Enrollment ==========
+class Inscription {
+  +String statut
+  +Date date_inscription
+}
+
+class InscriptionForm {
+  +JSON payload
+}
+
+class ListeAttente {
+  +String nom_enfant
+  +Integer position
+}
+
+class Paiement {
+  +Float montant
+  +String statut
+}
+
+' ========== Communication ==========
+class Notification {
+  +String type
+  +String message
+}
+
+class ChatRoom {
+  +String title
+}
+
+class ChatMessage {
+  +String body
+  +String type
+}
+
+class Menu {
+  +Date date_menu
+  +String type_repas
+}
+
+' ========== Scheduling ==========
+class EmploiTemplate {
+  +Date effective_from
+  +String status
+}
+
+' ========== Relations ==========
+
+' Enfant relations
+Enfant "*" -- "1" Classe
+Enfant "*" -- "*" ParentModel
+
+' SuivieNote - Association class (UML strict notation)
+Enfant "1" .. "*" SuivieNote
+Matiere "1" .. "*" SuivieNote
+SuivieNote "*" -- "1" Educateur : attribuée par
+
+' Grade - Association class
+Enfant "1" .. "*" Grade
+Matiere "1" .. "*" Grade
+Classe "1" .. "*" Grade
+
+' ParticipationActivite - Association class
+Enfant "1" .. "*" ParticipationActivite
+Activite "1" .. "*" ParticipationActivite
+ParticipationActivite "1" -- "0..1" Paiement
+
+' Presence
+Enfant "1" -- "*" Presence
+Educateur "1" -- "*" Presence
+
+' Classe relations
+Classe "*" -- "0..1" Salle
+Classe "*" -- "*" Matiere
+Classe "*" -- "*" Educateur
+
+' Activite
+Activite "*" -- "*" Educateur
+
+' Inscription
+Inscription "*" -- "1" Classe
+Inscription "*" -- "1" ParentModel
+Inscription "1" -- "*" Paiement
+Inscription "0..1" -- "1" InscriptionForm
+ListeAttente "1" -- "*" Inscription
+
+' Chat System
+ChatRoom "1" -- "*" ChatMessage
+ChatRoom "1" -- "1" Classe
+
+' ChatParticipant - Association class
+User "1" .. "*" ChatParticipant
+ChatRoom "1" .. "*" ChatParticipant
+
+ChatMessage "*" -- "1" ChatParticipant : envoyé par
+
+' Emploi - Association class
+EmploiTemplate "1" .. "*" EmploiTemplateSlot
+Matiere "1" .. "*" EmploiTemplateSlot
+EmploiTemplateSlot "*" -- "0..1" Salle
+EmploiTemplateSlot "*" -- "0..1" Educateur
+
+' Emploi template
+Classe "1" -- "*" EmploiTemplate
+
+' Notifications
+User "1" -- "*" Notification
+
+@enduml
