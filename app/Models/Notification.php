@@ -12,10 +12,8 @@ class Notification extends Model
     use HasFactory;
 
     protected $fillable = [
-        'notifiable_type',
-        'notifiable_id',
-        'sender_type',
-        'sender_id',
+        'user_id',          // Destinataire (remplace notifiable_type/id)
+        'sender_id',        // Expéditeur (User qui envoie)
         'type',
         'titre',
         'message',
@@ -40,15 +38,15 @@ class Notification extends Model
         'planifie_pour' => 'datetime',
     ];
 
-    // Relations polymorphiques
-    public function notifiable(): MorphTo
+    // Relations simples avec User
+    public function user()
     {
-        return $this->morphTo();
+        return $this->belongsTo(User::class, 'user_id');
     }
 
-    public function sender(): MorphTo
+    public function sender()
     {
-        return $this->morphTo();
+        return $this->belongsTo(User::class, 'sender_id');
     }
 
     // Scopes pour filtrer les notifications
@@ -80,7 +78,7 @@ class Notification extends Model
     public function scopePlanifiees($query)
     {
         return $query->whereNotNull('planifie_pour')
-                    ->where('planifie_pour', '>', now());
+            ->where('planifie_pour', '>', now());
     }
 
     // Méthodes utilitaires
