@@ -1,0 +1,164 @@
+@startuml
+title Diagramme de Cas d'Utilisation - ADMIN
+left to right direction
+
+actor Admin
+
+rectangle "SmartKids - Administration" {
+  
+  package "Gestion Utilisateurs" {
+    usecase "Créer utilisateur" as UC_U01
+    usecase "Modifier utilisateur" as UC_U02
+    usecase "Supprimer utilisateur" as UC_U03
+    usecase "Lister utilisateurs" as UC_U04
+    usecase "Attribuer rôle" as UC_U05
+    usecase "Réinitialiser mot de passe" as UC_U06
+    usecase "Consulter logs audit" as UC_U07
+  }
+  
+  package "Gestion Inscriptions" {
+    usecase "Consulter demandes" as UC_I01
+    usecase "Valider inscription" as UC_I02
+    usecase "Rejeter inscription" as UC_I03
+    usecase "Mettre en attente" as UC_I04
+    usecase "Gérer liste attente" as UC_I05
+    usecase "Assigner enfant à classe" as UC_I06
+    usecase "Consulter formulaires" as UC_I07
+  }
+  
+  package "Gestion Classes" {
+    usecase "Créer classe" as UC_C01
+    usecase "Modifier classe" as UC_C02
+    usecase "Supprimer classe" as UC_C03
+    usecase "Affecter éducateur" as UC_C04
+    usecase "Gérer capacité" as UC_C05
+    usecase "Consulter élèves" as UC_C06
+    usecase "Transférer élève" as UC_C07
+  }
+  
+  package "Gestion Enfants" {
+    usecase "Créer fiche enfant" as UC_E01
+    usecase "Modifier fiche" as UC_E02
+    usecase "Consulter fiche" as UC_E03
+    usecase "Lier parent" as UC_E04
+    usecase "Gérer infos santé" as UC_E05
+  }
+  
+  package "Gestion Académique" {
+    usecase "Créer matière" as UC_A01
+    usecase "Assigner matière" as UC_A02
+    usecase "Générer bulletins" as UC_A03
+    usecase "Consulter statistiques" as UC_A04
+    usecase "Valider bulletins" as UC_A05
+  }
+  
+  package "Gestion Financière" {
+    usecase "Suivre paiements" as UC_F01
+    usecase "Valider paiement" as UC_F02
+    usecase "Générer facture" as UC_F03
+    usecase "Gérer échéances" as UC_F04
+    usecase "Relancer paiements" as UC_F05
+    usecase "Consulter rapports" as UC_F06
+  }
+  
+  package "Emploi du Temps" {
+    usecase "Créer emploi" as UC_T01
+    usecase "Modifier emploi" as UC_T02
+    usecase "Ajouter créneau" as UC_T03
+    usecase "Supprimer créneau" as UC_T04
+    usecase "Assigner salle" as UC_T05
+    usecase "Assigner éducateur" as UC_T06
+  }
+  
+  package "Infrastructure" {
+    usecase "Créer salle" as UC_S01
+    usecase "Modifier salle" as UC_S02
+    usecase "Gérer menu cantine" as UC_S03
+    usecase "Planifier menus" as UC_S04
+  }
+  
+  package "Communication" {
+    usecase "Envoyer notification" as UC_N01
+    usecase "Créer salle chat" as UC_N02
+    usecase "Gérer participants" as UC_N03
+    usecase "Diffusion générale" as UC_N04
+  }
+  
+  package "Activités" {
+    usecase "Valider activités" as UC_V01
+    usecase "Gérer tarifs" as UC_V02
+  }
+  
+  package "Rapports" {
+    usecase "Tableau de bord" as UC_R01
+    usecase "Rapport présences" as UC_R02
+    usecase "Rapport notes" as UC_R03
+    usecase "Rapport financier" as UC_R04
+    usecase "Exporter données" as UC_R05
+  }
+}
+
+Admin --> UC_U01
+Admin --> UC_U02
+Admin --> UC_U03
+Admin --> UC_U04
+Admin --> UC_U05
+Admin --> UC_U06
+Admin --> UC_U07
+Admin --> UC_I01
+Admin --> UC_I02
+Admin --> UC_I03
+Admin --> UC_I04
+Admin --> UC_I05
+Admin --> UC_I06
+Admin --> UC_I07
+Admin --> UC_C01
+Admin --> UC_C02
+Admin --> UC_C03
+Admin --> UC_C04
+Admin --> UC_C05
+Admin --> UC_C06
+Admin --> UC_C07
+Admin --> UC_E01
+Admin --> UC_E02
+Admin --> UC_E03
+Admin --> UC_E04
+Admin --> UC_E05
+Admin --> UC_A01
+Admin --> UC_A02
+Admin --> UC_A03
+Admin --> UC_A04
+Admin --> UC_A05
+Admin --> UC_F01
+Admin --> UC_F02
+Admin --> UC_F03
+Admin --> UC_F04
+Admin --> UC_F05
+Admin --> UC_F06
+Admin --> UC_T01
+Admin --> UC_T02
+Admin --> UC_T03
+Admin --> UC_T04
+Admin --> UC_T05
+Admin --> UC_T06
+Admin --> UC_S01
+Admin --> UC_S02
+Admin --> UC_S03
+Admin --> UC_S04
+Admin --> UC_N01
+Admin --> UC_N02
+Admin --> UC_N03
+Admin --> UC_N04
+Admin --> UC_V01
+Admin --> UC_V02
+Admin --> UC_R01
+Admin --> UC_R02
+Admin --> UC_R03
+Admin --> UC_R04
+Admin --> UC_R05
+
+UC_I02 ..> UC_I04 : <<extend>>\nsi classe pleine
+UC_I02 ..> UC_I06 : <<include>>
+UC_F03 ..> UC_F02 : <<include>>
+
+@enduml

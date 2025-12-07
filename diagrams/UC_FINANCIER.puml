@@ -1,0 +1,63 @@
+@startuml
+title SmartKids - Gestion Financière
+
+actor Admin
+actor Parent
+actor Système
+
+package "Paiements" {
+  usecase "Créer facture inscription" as UC1
+  usecase "Créer facture activité" as UC2
+  usecase "Consulter mes factures" as UC3
+  usecase "Télécharger facture PDF" as UC4
+  usecase "Effectuer paiement en ligne" as UC5
+  usecase "Payer en espèces" as UC6
+  usecase "Payer par chèque" as UC7
+  usecase "Enregistrer paiement" as UC8
+  usecase "Valider paiement" as UC9
+  usecase "Générer reçu" as UC10
+  usecase "Consulter historique" as UC11
+}
+
+package "Suivi & Relances" {
+  usecase "Consulter paiements en attente" as UC12
+  usecase "Filtrer par statut" as UC13
+  usecase "Filtrer par parent" as UC14
+  usecase "Gérer échéances" as UC15
+  usecase "Envoyer rappel paiement" as UC16
+  usecase "Envoyer relance" as UC17
+  usecase "Générer rapport financier" as UC18
+  usecase "Calculer total encaissé" as UC19
+  usecase "Calculer impayés" as UC20
+}
+
+Parent --> UC3
+Parent --> UC4
+Parent --> UC5
+Parent --> UC6
+Parent --> UC7
+Parent --> UC11
+
+Admin --> UC1
+Admin --> UC2
+Admin --> UC8
+Admin --> UC9
+Admin --> UC12
+Admin --> UC13
+Admin --> UC14
+Admin --> UC15
+Admin --> UC16
+Admin --> UC17
+Admin --> UC18
+Admin --> UC19
+Admin --> UC20
+
+UC1 ..> UC10 : <<include>>
+UC2 ..> UC10 : <<include>>
+UC5 ..> UC9 : <<include>>
+UC8 ..> UC9 : <<include>>
+
+Système ..> UC16 : <<trigger>>\nauto-rappel
+Système ..> UC17 : <<trigger>>\nauto-relance
+
+@enduml

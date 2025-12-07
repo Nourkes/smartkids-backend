@@ -1,0 +1,108 @@
+@startuml
+title SmartKids - Cas d'Utilisation ADMIN (Complet)
+
+actor Admin
+
+rectangle "ADMIN - Toutes les fonctionnalités" {
+  
+  package "Utilisateurs" {
+    (Créer utilisateur)
+    (Modifier utilisateur)
+    (Supprimer utilisateur)
+    (Gérer rôles)
+    (Logs audit)
+  }
+  
+  package "Inscriptions" {
+    (Valider inscription)
+    (Rejeter inscription)
+    (Liste d'attente)
+    (Assigner classe)
+  }
+  
+  package "Classes" {
+    (Créer classe)
+    (Modifier classe)
+    (Affecter éducateur)
+    (Gérer capacité)
+  }
+  
+  package "Académique" {
+    (Créer matière)
+    (Générer bulletins)
+    (Statistiques notes)
+  }
+  
+  package "Enfants" {
+    (Créer fiche enfant)
+    (Modifier fiche)
+    (Lier parent)
+  }
+  
+  package "Financier" {
+    (Suivre paiements)
+    (Valider paiement)
+    (Gérer échéances)
+    (Générer factures)
+  }
+  
+  package "Emploi Temps" {
+    (Créer emploi)
+    (Gérer créneaux)
+    (Assigner salles)
+  }
+  
+  package "Infrastructure" {
+    (Gérer salles)
+    (Gérer menu)
+  }
+  
+  package "Communication" {
+    (Envoyer notifications)
+    (Créer chat)
+  }
+  
+  package "Rapports" {
+    (Tableau de bord)
+    (Rapports présences)
+    (Rapports financiers)
+    (Exporter données)
+  }
+}
+
+Admin --> (Créer utilisateur)
+Admin --> (Modifier utilisateur)
+Admin --> (Supprimer utilisateur)
+Admin --> (Gérer rôles)
+Admin --> (Logs audit)
+Admin --> (Valider inscription)
+Admin --> (Rejeter inscription)
+Admin --> (Liste d'attente)
+Admin --> (Assigner classe)
+Admin --> (Créer classe)
+Admin --> (Modifier classe)
+Admin --> (Affecter éducateur)
+Admin --> (Gérer capacité)
+Admin --> (Créer matière)
+Admin --> (Générer bulletins)
+Admin --> (Statistiques notes)
+Admin --> (Créer fiche enfant)
+Admin --> (Modifier fiche)
+Admin --> (Lier parent)
+Admin --> (Suivre paiements)
+Admin --> (Valider paiement)
+Admin --> (Gérer échéances)
+Admin --> (Générer factures)
+Admin --> (Créer emploi)
+Admin --> (Gérer créneaux)
+Admin --> (Assigner salles)
+Admin --> (Gérer salles)
+Admin --> (Gérer menu)
+Admin --> (Envoyer notifications)
+Admin --> (Créer chat)
+Admin --> (Tableau de bord)
+Admin --> (Rapports présences)
+Admin --> (Rapports financiers)
+Admin --> (Exporter données)
+
+@enduml
