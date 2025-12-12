@@ -72,7 +72,27 @@ Route::post('/paiements/{paiement}/simulate', [PaiementController::class, 'simul
 
 /* ──────────────── ROUTES PROTÉGÉES ──────────────── */
 Route::middleware('auth:sanctum')->group(function () {
+    /* ──────────────── Chat ──────────────── */
+    Route::prefix('chat')->group(function () {
 
+        // 👉 Liste des salons où l'utilisateur est membre
+        //    → correspond à GET /api/chat/rooms
+        Route::get('/rooms', [ClassChatController::class, 'myRooms']);
+
+        // Créer / récupérer le salon associé à une classe
+        //    → /api/chat/classes/{classe}/room
+        Route::post('/classes/{classe}/room', [ClassChatController::class, 'ensureRoom']);
+
+        // Messages d’un salon
+        Route::get('/rooms/{room}/messages', [ClassChatController::class, 'messages']);
+        Route::post('/rooms/{room}/messages', [ClassChatController::class, 'send']);
+
+        // Participants
+        Route::get('/rooms/{room}/participants', [ClassChatController::class, 'participants']);
+
+        // Marquer comme lu
+        Route::post('/rooms/{room}/read', [ClassChatController::class, 'markRead']);
+    });
     /* ─── Session / profil générique ─── */
     Route::prefix('auth')->group(function () {
         Route::post('/logout', [AuthController::class, 'logout']);

@@ -9,6 +9,14 @@ class Enfant extends Model
 {
     use HasFactory;
 
+    /**
+     * Scope pour les enfants "actifs" (inscrits dans une classe)
+     */
+    public function scopeActive($query)
+    {
+        return $query->whereNotNull('classe_id');
+    }
+
     protected $table = 'enfant';
 
     protected $fillable = [

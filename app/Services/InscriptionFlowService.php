@@ -121,6 +121,20 @@ class InscriptionFlowService
                     'date_traitement' => now(),
                 ]);
 
+                // Envoyer email de refus
+                try {
+                    Mail::to($i->email_parent)->send(
+                        new \App\Mail\InscriptionRejectedMail(
+                            $i->prenom_parent . ' ' . $i->nom_parent,
+                            $i->prenom_enfant . ' ' . $i->nom_enfant,
+                            $remarques
+                        )
+                    );
+                    \Log::info('✅ Email refus envoyé', ['email' => $i->email_parent]);
+                } catch (\Throwable $e) {
+                    \Log::error('❌ Email refus non envoyé', ['error' => $e->getMessage()]);
+                }
+
                 return ['inscription' => $i->fresh(), 'paiement' => null];
             }
 
@@ -131,10 +145,26 @@ class InscriptionFlowService
                 $i->update([
                     'statut' => 'waiting',
                     'position_attente' => $pos,
+                    'classe_id' => null,
                     'remarques_admin' => $remarques,
                     'traite_par_admin_id' => $adminId,
                     'date_traitement' => now(),
                 ]);
+
+                // Envoyer email liste d'attente
+                try {
+                    Mail::to($i->email_parent)->send(
+                        new \App\Mail\InscriptionWaitingMail(
+                            $i->prenom_parent . ' ' . $i->nom_parent,
+                            $i->prenom_enfant . ' ' . $i->nom_enfant,
+                            $pos,
+                            $i->niveau_souhaite
+                        )
+                    );
+                    \Log::info('✅ Email liste d\'attente envoyé', ['email' => $i->email_parent, 'position' => $pos]);
+                } catch (\Throwable $e) {
+                    \Log::error('❌ Email liste d\'attente non envoyé', ['error' => $e->getMessage()]);
+                }
 
                 return ['inscription' => $i->fresh(), 'paiement' => null];
             }
