@@ -6,7 +6,7 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class SimulatePaymentRequest extends FormRequest
 {
-    public function authorize(): bool { return true; } 
+    public function authorize(): bool { return true; } // public (token)
 
     public function rules(): array
     {

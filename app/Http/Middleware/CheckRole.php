@@ -5,13 +5,14 @@ namespace App\Http\Middleware;
 
 use Closure;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Log;  
+use Illuminate\Support\Facades\Log;   // <-- important
 use Symfony\Component\HttpFoundation\Response;
 
 class CheckRole
 {
     public function handle(Request $request, Closure $next, ...$roles): Response
     {
+        // Log d'entrée : qui arrive et quels rôles sont requis
         Log::info('CheckRole: entering', [
             'uid'       => optional($request->user())->id,
             'user_role' => optional($request->user())->role,

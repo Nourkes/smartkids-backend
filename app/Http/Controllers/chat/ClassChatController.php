@@ -13,35 +13,49 @@ class ClassChatController extends Controller
 {
     public function file(string $path): StreamedResponse
 {
+    // On travaille sur le disk 'public' (storage/app/public)
     abort_unless(Storage::disk('public')->exists($path), 404);
+
+    // Optionnel : sécuriser le répertoire
     abort_unless(str_starts_with($path, 'chat_attachments/'), 403);
+
+    // Retourne le fichier (avec les bons headers)
     return Storage::disk('public')->response($path);
 }
     public function __construct(private ClassChatService $svc) {}
 
+    // liste des salons où je suis membre
+// app/Http/Controllers/Chat/ClassChatController.php
     public function myRooms(Request $r)
     {
         $user = $r->user();
         $classeIds = collect();
 
+        // nom réel de la table "classe"/"classes"
         $classeTable = (new Classe)->getTable();
 
+        // Éducateur -> classes()
         if ($user->educateur) {
             $ids = $user->educateur
                 ->classes()
-                ->pluck("$classeTable.id");  
+                ->pluck("$classeTable.id");   // <-- pas de nom en dur
             $classeIds = $classeIds->merge($ids);
         }
 
+        // Parent -> classe_id des enfants
         if ($user->parent) {
             $ids = $user->parent->enfants()
                 ->whereNotNull('classe_id')
                 ->pluck('classe_id');
             $classeIds = $classeIds->merge($ids);
         }
+
+        // Assurer la création des salons + inscription des participants
         foreach ($classeIds->unique() as $cid) {
             $this->svc->ensureRoomForClasse((int)$cid);
         }
+
+        // Lister les salons où je suis participant
         $rooms = ChatRoom::whereHas('participants', fn ($q) => $q->where('user_id', $user->id))
             ->with('classe:id,nom,niveau')
             ->withCount('messages')
@@ -59,11 +73,16 @@ class ClassChatController extends Controller
 
         return response()->json(['success' => true, 'data' => $rooms]);
     }
+
+
+    // créer/retourner le salon d'une classe
     public function ensureRoom(Request $r, Classe $classe) {
         $room = $this->svc->ensureRoomForClasse($classe->id);
         $this->authorizeJoin($r->user()->id, $room->id);
         return response()->json(['success'=>true,'data'=>['room_id'=>$room->id]]);
     }
+
+    // liste des messages
     public function messages(Request $r, ChatRoom $room) {
         $this->authorizeJoin($r->user()->id, $room->id);
 
@@ -76,6 +95,8 @@ class ClassChatController extends Controller
 
         return response()->json(['success'=>true,'data'=>$list]);
     }
+
+    // envoyer un message (texte + fichier optionnel)
     public function send(Request $r, ChatRoom $room) {
         $this->authorizeJoin($r->user()->id, $room->id);
         $r->validate([

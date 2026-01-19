@@ -12,7 +12,7 @@ class Activite extends Model
     // ⚠️ Garde ceci uniquement si ta table s’appelle vraiment "activite"
     // (si ta table est "activites", supprime cette ligne)
     protected $table = 'activite';
-    public const TYPES = ['sport', 'musique', 'theatre', 'artistique'];
+    public const TYPES = ['musique','peinture','sport','lecture','sortie','autre'];
     protected $fillable = [
         'nom',
         'description',

@@ -79,6 +79,7 @@ class ClasseEducateurController extends Controller
         try {
             $user = auth()->user();
             
+            // Si c'est un éducateur, vérifier qu'il a accès à cette classe
             if ($user->isEducateur()) {
                 $educateur = $user->educateur;
                 if (!$educateur->classes()->where('classe_id', $classe->id)->exists()) {
@@ -114,6 +115,7 @@ class ClasseEducateurController extends Controller
         try {
             $user = auth()->user();
             
+            // Si c'est un éducateur, vérifier qu'il consulte ses propres classes
             if ($user->isEducateur() && $user->educateur->id !== $educateur->id) {
                 return response()->json([
                     'success' => false,

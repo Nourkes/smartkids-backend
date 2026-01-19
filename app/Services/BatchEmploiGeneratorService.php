@@ -400,10 +400,12 @@ class BatchEmploiGeneratorService
     ): ?int {
         $key = "$debut-$fin";
 
+        // home room prioritaire si libre
         if ($homeSalleId && in_array($homeSalleId, $candidates, true)) {
             if (empty($busySalle[$homeSalleId][$jour][$key])) return $homeSalleId;
         }
 
+        // autre salle candidate libre, la moins “utilisée”
         $pool = array_values(array_filter(
             $candidates,
             fn($sid) => empty($busySalle[$sid][$jour][$key])

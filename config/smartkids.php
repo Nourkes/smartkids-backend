@@ -2,9 +2,14 @@
 return [
     'academic_years' => [
         '2025-2026' => '2025-09-01',
+        '2024-2025' => '2024-09-01',
+        '2023-2024' => '2023-09-01',
     ],
-    'mois_par_semestre' => ['S1' => 3, 'S2' => 5,'s3'=>3],
-    'first_month_prorata' => ['enabled' => true], 
+
+    // Année scolaire actuellement active (à changer chaque année en septembre)
+    'current_academic_year' => '2024-2025',
+    'mois_par_semestre' => ['S1' => 3, 'S2' => 5, 's3' => 3],
+    'first_month_prorata' => ['enabled' => true],
     'grace_days' => 0,
     'deep_link_base' => env('SMARTKIDS_DEEP_LINK_BASE', 'https://pay.smartkids.tn/p/'),
 

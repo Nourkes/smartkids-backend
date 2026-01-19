@@ -17,7 +17,9 @@ use App\Models\User;
 
 class EnfantController extends Controller
 {
-  
+    /**
+     * 📋 Afficher la liste des enfants avec filtres
+     */
 public function index(Request $request): JsonResponse 
 {
     try {
@@ -25,6 +27,7 @@ public function index(Request $request): JsonResponse
         
         // Vos filtres existants...
         
+        // 📄 Pagination conditionnelle
         if ($request->boolean('paginate')) {
             $perPage = $request->get('per_page', 15);
             $enfants = $query->paginate($perPage);
@@ -56,7 +59,9 @@ public function index(Request $request): JsonResponse
         ], 500);
     }
 }
-   
+    /**
+     * 👁️ Afficher un enfant spécifique
+     */
     public function show(Enfant $enfant): JsonResponse
     {
     
@@ -307,20 +312,30 @@ public function destroy(Enfant $enfant): JsonResponse
         DB::beginTransaction();
 
         Log::info('=== SUPPRESSION ENFANT ===', ['enfant_id' => $enfant->id, 'nom' => $enfant->nom, 'prenom' => $enfant->prenom]);
+
+        // 1) Mémoriser les parents AVANT de détacher (avec leur user)
         $parents = $enfant->parents()->with('user')->get();
         Log::info('Parents liés (avant détachement)', ['count' => $parents->count(), 'ids' => $parents->pluck('id')->all()]);
+
+        // 2) Détacher les parents de l'enfant (table pivot)
         $detached = $enfant->parents()->detach();
         Log::info('Parents détachés', ['detached_count' => $detached]);
+
+        // 3) Supprimer l'enfant
         $enfantDeleted = $enfant->delete();
         Log::info('Enfant supprimé', ['success' => (bool) $enfantDeleted]);
+
+        // 4) Traiter chaque parent : s'il n'a plus d'enfants -> supprimer parent + user
         foreach ($parents as $parent) {
-            $hasOtherKids = $parent->enfants()->exists(); 
+            $hasOtherKids = $parent->enfants()->exists(); // requête fraiche après détachement
             Log::info('Vérif parent orphelin', ['parent_id' => $parent->id, 'has_other_kids' => $hasOtherKids]);
 
             if (!$hasOtherKids) {
+                // D'abord supprimer le parent (sécurise si l'ON DELETE CASCADE n'est pas configuré)
                 $parentDeleted = $parent->delete();
                 Log::info('Parent supprimé (orphelin)', ['parent_id' => $parent->id, 'success' => (bool) $parentDeleted]);
 
+                // Puis supprimer le user associé
                 if ($parent->user) {
                     $userId = $parent->user->id;
                     $userDeleted = $parent->user->delete();

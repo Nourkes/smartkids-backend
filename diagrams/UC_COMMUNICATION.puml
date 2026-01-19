@@ -1,0 +1,65 @@
+@startuml
+title SmartKids - Communication
+
+actor Admin
+actor Educateur
+actor Parent
+actor Système
+
+package "Notifications" {
+  usecase "Créer notification" as UC1
+  usecase "Sélectionner destinataires" as UC2
+  usecase "Rédiger message" as UC3
+  usecase "Définir priorité" as UC4
+  usecase "Planifier envoi" as UC5
+  usecase "Envoyer immédiatement" as UC6
+  usecase "Consulter mes notifications" as UC7
+  usecase "Marquer comme lu" as UC8
+  usecase "Archiver notification" as UC9
+  usecase "Filtrer notifications" as UC10
+}
+
+package "Chat & Messagerie" {
+  usecase "Créer salle chat classe" as UC11
+  usecase "Ajouter participants" as UC12
+  usecase "Définir rôles" as UC13
+  usecase "Participer au chat" as UC14
+  usecase "Envoyer message" as UC15
+  usecase "Envoyer pièce jointe" as UC16
+  usecase "Consulter historique" as UC17
+  usecase "Rechercher message" as UC18
+  usecase "Marquer dernier lu" as UC19
+}
+
+package "Contact Direct" {
+  usecase "Contacter éducateur" as UC20
+  usecase "Contacter admin" as UC21
+  usecase "Contacter parent" as UC22
+  usecase "Envoyer email" as UC23
+}
+
+Admin --> UC1
+Admin --> UC11
+Admin --> UC12
+Admin --> UC13
+
+Educateur --> UC1
+Educateur --> UC14
+Educateur --> UC15
+Educateur --> UC16
+Educateur --> UC22
+
+Parent --> UC7
+Parent --> UC8
+Parent --> UC9
+Parent --> UC10
+Parent --> UC14
+Parent --> UC15
+Parent --> UC17
+Parent --> UC20
+
+UC1 ..> UC2 : <<include>>
+UC1 ..> UC3 : <<include>>
+UC6 ..> Système : <<trigger>>
+
+@enduml

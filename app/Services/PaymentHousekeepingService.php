@@ -22,7 +22,8 @@ class PaymentHousekeepingService
             /** @var Inscription $i */
             $i = $p->inscription()->lockForUpdate()->first();
 
-           
+            // Si l'inscription n'a jamais été finalisée (parent/enfant non créés), on supprime juste l'inscription + paiements
+           // Si l'inscription n'a jamais été finalisée (parent non créé), on supprime juste l'inscription + paiements
 if (!$i->parent_id) {
     $i->paiements()->delete();
     $i->delete();
@@ -57,7 +58,7 @@ $hasOtherPaid = Paiement::where('parent_id', $parent->id)
 if (!$hasOtherPaid) {
     $parent->enfants()->detach();
     if ($parent->user_id && ($user = User::find($parent->user_id))) {
-        $user->delete(); 
+        $user->delete(); // ou soft delete si besoin
     }
     $parent->delete();
 }
@@ -65,6 +66,7 @@ if (!$hasOtherPaid) {
         });
     }
 
+    /** Expire en masse tous les paiements échus en 'en_attente' */
     public function massExpireOverdue(): int
     {
         $now = Carbon::now();

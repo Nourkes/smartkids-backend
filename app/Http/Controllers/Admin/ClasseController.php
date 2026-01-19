@@ -62,7 +62,7 @@ class ClasseController extends Controller
                 $classe->places_disponibles = $classe->capacite_max - $classe->nombre_enfants;
                 $classe->est_complete = $classe->nombre_enfants >= $classe->capacite_max;
                 $classe->nombre_educateurs = $classe->educateurs->count();
-                unset($classe->enfants); 
+                unset($classe->enfants); // Pas besoin des détails des enfants dans la liste
                 return $classe;
             });
 
@@ -117,6 +117,7 @@ class ClasseController extends Controller
                 ], 422);
             }
 
+            // CORRECTION: Utiliser $validator->validated() au lieu de $request->validated()
             $classe = Classe::create($validator->validated());
 
             $classe->load(['educateurs.user']);
@@ -148,7 +149,7 @@ class ClasseController extends Controller
     {
         try {
             $classe = Classe::with([
-                'educateurs.user:id,nom,prenom,email',
+                'educateurs.user:id,name,email',
                 'enfants:id,nom,prenom,date_naissance,classe_id',
                 'matieres:id,nom'
             ])->findOrFail($id);
@@ -397,6 +398,7 @@ public function update(Request $request, $id)
   public function withEducateurs()
 {
     try {
+        // Eager-load propre avec colonnes qualifiées
         $classes = Classe::query()
             ->with([
                 'educateurs' => fn ($q) => $q->select('educateurs.id', 'educateurs.user_id'),
@@ -406,6 +408,7 @@ public function update(Request $request, $id)
             ->orderBy('classe.nom')
             ->get();
 
+        // Payload minimal: { id, name, educateurs: [{id, name}] }
         $data = $classes->map(function ($c) {
             return [
                 'id'   => $c->id,
@@ -458,7 +461,7 @@ public function update(Request $request, $id)
             $term = $request->term;
             $filters = $request->get('filters', []);
 
-            $query = Classe::with(['educateurs.user:id,nom,prenom', 'enfants:id,classe_id'])
+            $query = Classe::with(['educateurs.user:id,name', 'enfants:id,classe_id'])
                 ->where(function($q) use ($term) {
                     $q->where('nom', 'LIKE', "%{$term}%")
                       ->orWhere('niveau', 'LIKE', "%{$term}%")
@@ -613,7 +616,7 @@ public function update(Request $request, $id)
     {
         try {
             $classe = Classe::with([
-                'educateurs.user:id,nom,prenom,email,telephone',
+                'educateurs.user:id,name,email,telephone',
                 'enfants:id,nom,prenom,date_naissance,classe_id,allergies',
                 'matieres:id,nom,description'
             ])->findOrFail($id);
@@ -672,6 +675,7 @@ public function update(Request $request, $id)
         try {
             $classe = Classe::findOrFail($id);
 
+            // Vérifier s'il y a des enfants
             $nombreEnfants = $classe->enfants()->count();
             if ($nombreEnfants > 0) {
                 return response()->json([
@@ -732,7 +736,8 @@ public function update(Request $request, $id)
     public function classesByNiveau($niveau)
     {
         try {
-            $classes = Classe::with(['educateurs.user:id,nom,prenom', 'enfants:id,classe_id'])
+
+            $classes = Classe::with(['educateurs.user:id,name', 'enfants:id,classe_id'])
                 ->where('niveau', $niveau)
                 ->orderBy('nom')
                 ->get();
@@ -850,7 +855,7 @@ public function update(Request $request, $id)
             $format = $request->get('format', 'json'); // json, csv, excel
 
             $classes = Classe::with([
-                'educateurs.user:id,nom,prenom,email',
+                'educateurs.user:id,name,email',
                 'enfants:id,nom,prenom,date_naissance,classe_id',
                 'matieres:id,nom'
             ])->get();

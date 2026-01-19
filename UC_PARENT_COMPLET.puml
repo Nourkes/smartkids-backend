@@ -1,0 +1,105 @@
+@startuml
+title SmartKids - Cas d'Utilisation PARENT (Complet)
+
+actor Parent
+
+rectangle "PARENT - Toutes les fonctionnalités" {
+  
+  package "Inscriptions" {
+    (Soumettre inscription)
+    (Remplir formulaire)
+    (Mes inscriptions)
+    (Consulter statut)
+  }
+  
+  package "Mes Enfants" {
+    (Consulter mes enfants)
+    (Consulter fiche)
+    (Modifier infos santé)
+    (Contact urgence)
+  }
+  
+  package "Suivi Académique" {
+    (Consulter notes)
+    (Consulter bulletin)
+    (Télécharger bulletin)
+    (Consulter moyennes)
+    (Historique scolaire)
+  }
+  
+  package "Présences" {
+    (Consulter absences)
+    (Justifier absence)
+    (Télécharger justificatif)
+  }
+  
+  package "Activités" {
+    (Lister activités)
+    (Inscrire à activité)
+    (Désinscrire)
+    (Mes participations)
+  }
+  
+  package "Paiements" {
+    (Effectuer paiement)
+    (Mes paiements)
+    (Télécharger facture)
+    (Historique)
+    (Échéances)
+  }
+  
+  package "Emploi Temps" {
+    (Consulter emploi)
+    (Voir créneaux)
+  }
+  
+  package "Menu" {
+    (Consulter menu semaine)
+    (Menu du jour)
+  }
+  
+  package "Communication" {
+    (Consulter notifications)
+    (Marquer lu)
+    (Participer chat)
+    (Envoyer message)
+    (Contacter éducateur)
+  }
+}
+
+Parent --> (Soumettre inscription)
+Parent --> (Remplir formulaire)
+Parent --> (Mes inscriptions)
+Parent --> (Consulter statut)
+Parent --> (Consulter mes enfants)
+Parent --> (Consulter fiche)
+Parent --> (Modifier infos santé)
+Parent --> (Contact urgence)
+Parent --> (Consulter notes)
+Parent --> (Consulter bulletin)
+Parent --> (Télécharger bulletin)
+Parent --> (Consulter moyennes)
+Parent --> (Historique scolaire)
+Parent --> (Consulter absences)
+Parent --> (Justifier absence)
+Parent --> (Télécharger justificatif)
+Parent --> (Lister activités)
+Parent --> (Inscrire à activité)
+Parent --> (Désinscrire)
+Parent --> (Mes participations)
+Parent --> (Effectuer paiement)
+Parent --> (Mes paiements)
+Parent --> (Télécharger facture)
+Parent --> (Historique)
+Parent --> (Échéances)
+Parent --> (Consulter emploi)
+Parent --> (Voir créneaux)
+Parent --> (Consulter menu semaine)
+Parent --> (Menu du jour)
+Parent --> (Consulter notifications)
+Parent --> (Marquer lu)
+Parent --> (Participer chat)
+Parent --> (Envoyer message)
+Parent --> (Contacter éducateur)
+
+@enduml

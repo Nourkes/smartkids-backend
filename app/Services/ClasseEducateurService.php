@@ -18,6 +18,7 @@ class ClasseEducateurService
             $educateur = Educateur::findOrFail($data['educateur_id']);
             $classe = Classe::findOrFail($data['classe_id']);
 
+            // Vérifier si l'éducateur n'est pas déjà assigné à cette classe
             if ($educateur->classes()->where('classe_id', $data['classe_id'])->exists()) {
                 throw new Exception('Cet éducateur est déjà assigné à cette classe.');
             }

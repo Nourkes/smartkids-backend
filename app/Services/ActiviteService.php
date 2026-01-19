@@ -13,12 +13,20 @@ class ActiviteService
 {
     /* ========== TYPES ========== */
 
-    public function typesPublic(): array
+   public function typesPublic(): array
     {
-        return Activite::query()
-            ->whereNotNull('type')
-            ->select('type')->distinct()->orderBy('type')
-            ->pluck('type')->values()->all();
+        $column = DB::selectOne("
+            SHOW COLUMNS 
+            FROM activite 
+            WHERE Field = 'type'
+        ");
+
+        preg_match("/^enum\((.*)\)$/", $column->Type, $matches);
+
+        return collect(explode(',', $matches[1]))
+            ->map(fn ($v) => trim($v, "'"))
+            ->values()
+            ->all();
     }
 
     /* ========== READ ========== */

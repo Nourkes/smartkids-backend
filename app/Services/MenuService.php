@@ -145,6 +145,7 @@ public function upsertDailyMenus(string $date, string $type, ?array $lunch, ?arr
         $startDate = Carbon::parse($weekStartDate)->startOfWeek();
         $createdMenus = collect();
 
+        // Vérifier si des menus existent déjà pour cette semaine
         $existingMenus = Menu::whereBetween('date_menu', [
             $startDate->copy(),
             $startDate->copy()->endOfWeek()
@@ -154,6 +155,7 @@ public function upsertDailyMenus(string $date, string $type, ?array $lunch, ?arr
             throw new \Exception("Des menus existent déjà pour cette semaine et ce type de repas.");
         }
 
+        // Créer les menus pour chaque jour de la semaine (Lundi à Vendredi)
         for ($i = 0; $i < 5; $i++) {
             $menuDate = $startDate->copy()->addDays($i);
             $menuData = $menusData[$i] ?? null;
@@ -173,7 +175,9 @@ public function upsertDailyMenus(string $date, string $type, ?array $lunch, ?arr
         return $createdMenus;
     }
 
- 
+    /**
+     * Obtenir le menu de la semaine courante
+     */
     public function getCurrentWeekMenu(string $typeRepas): Collection
     {
         $startOfWeek = Carbon::now()->startOfWeek();
@@ -199,7 +203,9 @@ public function upsertDailyMenus(string $date, string $type, ?array $lunch, ?arr
                    ->get();
     }
 
-  
+    /**
+     * Dupliquer un menu hebdomadaire vers une autre semaine
+     */
     public function duplicateWeeklyMenu(string $sourceWeekStart, string $targetWeekStart, string $typeRepas): Collection
     {
         $sourceStart = Carbon::parse($sourceWeekStart)->startOfWeek();

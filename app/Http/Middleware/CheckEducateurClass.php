@@ -29,6 +29,7 @@ class CheckEducateurClass
             ], 404);
         }
 
+        // Vérification pour les routes avec classeId
         $classeId = $request->route('classeId') ?? $request->route('classe');
         
         if ($classeId) {
@@ -40,6 +41,7 @@ class CheckEducateurClass
             }
         }
 
+        // Ajouter l'éducateur à la requête pour éviter les requêtes répétées
         $request->merge(['educateur' => $educateur]);
 
         return $next($request);

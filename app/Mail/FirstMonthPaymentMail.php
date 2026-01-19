@@ -31,7 +31,7 @@ class FirstMonthPaymentMail extends Mailable
     public function content(): Content
     {
         return new Content(
-            view: 'emails.first_month_payment',
+            view: 'emails.first_month_payment', // <— DOIT exister
             with: [
                 'i' => $this->inscription,
                 'p' => $this->paiement,

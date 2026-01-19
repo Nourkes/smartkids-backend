@@ -16,7 +16,9 @@ use Illuminate\Support\Str;
 
 class EducateurService
 {
-    
+    /* =========================================================
+     * Listing + recherche
+     * ========================================================= */
     public function getAllEducateurs(int $perPage = 15, ?string $search = null)
     {
         $q = Educateur::with(['user', 'classes', 'activites']);
@@ -31,7 +33,11 @@ class EducateurService
         return $q->paginate($perPage);
     }
 
-
+    /* =========================================================
+     * Création (User + Educateur) + mot de passe provisoire + email
+     * $data attend au minimum: name, email
+     * Optionnels: diplome, date_embauche, salaire, photo (UploadedFile)
+     * ========================================================= */
     public function createEducateur(array $data): Educateur
     {
         return DB::transaction(function () use ($data) {
@@ -47,12 +53,13 @@ class EducateurService
                 'must_change_password' => true, // nécessite la colonne en DB
             ]);
 
+            // 3) Flag workflow (optionnel)
             Cache::put("first_login:{$user->id}:force", true, now()->addDays(7));
 
             // 4) Photo éventuelle
             $photoPath = null;
             if (isset($data['photo']) && $data['photo'] instanceof UploadedFile) {
-                $photoPath = $data['photo']->store('educateurs', 'public'); 
+                $photoPath = $data['photo']->store('educateurs', 'public'); // storage/app/public/educateurs/...
             }
 
             // 5) Créer l’éducateur
@@ -62,7 +69,7 @@ class EducateurService
                 'date_embauche' => $data['date_embauche'] ?? null,
                 'salaire'       => $data['salaire']       ?? 0,
                 'photo'         => $photoPath,
-                'telephone'     => $data['telephone'] ?? null,   
+                'telephone'     => $data['telephone'] ?? null,   // ✅ nouveau
 
             ]);
 
@@ -83,7 +90,10 @@ class EducateurService
         });
     }
 
-
+    /* =========================================================
+     * Mise à jour (User + Educateur) + remplacement photo
+     * $data optionnels: name, email, password, diplome, date_embauche, salaire, photo (UploadedFile)
+     * ========================================================= */
     public function updateEducateur(Educateur $educateur, array $data): Educateur
     {
         return DB::transaction(function () use ($educateur, $data) {
@@ -110,6 +120,7 @@ class EducateurService
                 $educateurData['photo'] = $data['photo']->store('educateurs', 'public');
             }
 
+            // --- CHAMPS EDU ---
             if (array_key_exists('diplome', $data))        $educateurData['diplome']       = $data['diplome'];
             if (array_key_exists('date_embauche', $data))  $educateurData['date_embauche'] = $data['date_embauche'];
             if (array_key_exists('salaire', $data))        $educateurData['salaire']       = $data['salaire'];
@@ -122,8 +133,9 @@ class EducateurService
         });
     }
 
-
-
+    /* =========================================================
+     * Mise à jour de profil (nom/email/mdp uniquement)
+     * ========================================================= */
     public function updateEducateurProfile(Educateur $educateur, array $data): Educateur
     {
         return DB::transaction(function () use ($educateur, $data) {
@@ -140,7 +152,9 @@ class EducateurService
         });
     }
 
-   
+    /* =========================================================
+     * Suppression (User + Educateur + photo)
+     * ========================================================= */
     public function deleteEducateur(Educateur $educateur): bool
     {
         return DB::transaction(function () use ($educateur) {
@@ -159,7 +173,9 @@ class EducateurService
         });
     }
 
-
+    /* =========================================================
+     * Récupération avec relations
+     * ========================================================= */
     public function getEducateurById(int|string $id): Educateur
     {
         return Educateur::with(['user', 'classes', 'activites'])->findOrFail($id);

@@ -8,7 +8,13 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class ActiviteParticipationService
+{public function dejaInscrit(Activite $activite, int $enfantId): bool
 {
+    return ParticipationActivite::where('activite_id', $activite->id)
+        ->where('enfant_id', $enfantId)
+        ->exists();
+}
+
     /**
      * Inscrire un enfant à une activité (et créer un paiement si prix > 0).
      * Ne modifie AUCUN de tes modèles existants.
@@ -52,13 +58,13 @@ class ActiviteParticipationService
             if ($montant > 0 && $participation) {
                 // parent_id optionnel : si fourni on le renseigne
                 $paiement = Paiement::create([
-                    'parent_id'                 => $parentId, 
+                    'parent_id'                 => $parentId, // peut rester null si non dispo
                     'participation_activite_id' => $participation->id,
                     'montant'                   => $montant,
                     'type'                      => 'activite',
                     'methode_paiement'          => $methodePaiement ?: 'cash',
                     'date_echeance'             => $activite->date_activite ?? now()->addDays(7),
-                    'statut'                    => 'en_attente', 
+                    'statut'                    => 'en_attente', // à régler plus tard
                     'remarques'                 => $remarques,
                 ]);
             }
@@ -80,7 +86,9 @@ class ActiviteParticipationService
         }
 
         DB::transaction(function () use ($activite, $enfantId) {
+            // Optionnel : annuler/mettre à jour le paiement lié
             if ($p = ParticipationActivite::where('activite_id', $activite->id)->where('enfant_id', $enfantId)->first()) {
+                // ex: marquer le paiement comme annulé si encore en attente
                 if ($p->paiement && $p->paiement->statut === 'en_attente') {
                     $p->paiement->update(['statut' => 'annule']);
                 }

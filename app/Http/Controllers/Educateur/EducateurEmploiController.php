@@ -61,6 +61,7 @@ class EducateurEmploiController extends Controller
                 'salle_code'         => $r->salle_code,
                 'salle_nom'          => $r->salle_nom,
 
+                // ⬇️ IMPORTANT: URL publique vers /storage/...
                 'matiere_photo'      => $r->matiere_photo
                                         ? Storage::url($r->matiere_photo)
                                         : null,
@@ -71,10 +72,11 @@ class EducateurEmploiController extends Controller
             'success' => true,
             'data'    => [
                 'date'  => $date,
-                'slots' => $slots,
+                'slots' => $slots, // (si ton Flutter lit "events", renomme ici ou adapte le parsing)
             ],
         ]);
     }
+    /** Agrégat "template actif" pour l’éducateur connecté */
     public function myActiveTemplate(Request $request)
     {
         $user = $request->user();
@@ -82,7 +84,7 @@ class EducateurEmploiController extends Controller
 
         $rows = DB::table('emploi_template_slots as s')
             ->join('emploi_templates as t', 't.id', '=', 's.emploi_template_id')
-            ->leftJoin('classe as c', 'c.id', '=', 't.classe_id')      
+            ->leftJoin('classe as c', 'c.id', '=', 't.classe_id')      // <-- table 'classe'
             ->leftJoin('salles as sa', 'sa.id', '=', 's.salle_id')
             ->leftJoin('matiere as m', 'm.id', '=', 's.matiere_id')
             ->where('t.status', 'published')
@@ -104,7 +106,7 @@ class EducateurEmploiController extends Controller
 
         $payload = [
             'id'             => 0,
-            'classe_id'      => 0,                 
+            'classe_id'      => 0,                 // agrégat multi-classes
             'period_start'   => $periodStart,
             'period_end'     => $periodEnd,
             'effective_from' => $periodStart,

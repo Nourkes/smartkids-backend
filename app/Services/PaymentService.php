@@ -18,6 +18,7 @@ private function monthly(Inscription $i): float
     if ($i->classe && $i->classe->frais_mensuel) {
         return (float) $i->classe->frais_mensuel;
     }
+    // Optionnel : par niveau (si tu l’as configuré)
     $map = config('smartkids.frais_mensuel_by_niveau', []);
     if (!empty($map) && array_key_exists($i->niveau_souhaite, $map)) {
         return (float) $map[$i->niveau_souhaite];
@@ -71,7 +72,7 @@ private function monthly(Inscription $i): float
         return [
             'periode_index'   => $idx,
             'periode_start'   => $pStart->toDateString(),
-            'periode_end'     => $pEnd->toDateString(), 
+            'periode_end'     => $pEnd->toDateString(), // exclusive
             'montant_du'      => $amount,
             'montant_mensuel' => round($this->monthly($i), 2),
             'echeance'        => $due->toDateString(),
@@ -83,7 +84,7 @@ private function monthly(Inscription $i): float
     {
         return DB::transaction(function () use ($i, $quote, $methode) {
             return Paiement::create([
-                'parent_id'          => $i->parent_id, 
+                'parent_id'          => $i->parent_id, // peut être null avant finalisation
                 'inscription_id'     => $i->id,
                 'type'               => 'scolarite',
                 'plan'               => 'mensuel',
@@ -96,6 +97,7 @@ private function monthly(Inscription $i): float
         });
     }
 
+    /** Mois suivants (montant plein) */
     public function quoteMonthly(Inscription $i, Carbon $payDate): array
     {
         [$yearStart, $idx] = $this->resolveYearAndIndex($i, $payDate);
@@ -105,6 +107,7 @@ private function monthly(Inscription $i): float
         }
         [$pStart, $pEnd] = AcademicCalendar::periodBounds($yearStart, $idx);
 
+        // Échéance = min(fin de période, début de période + deadline)
         $dueByPeriodEnd = $pEnd->copy();
         $dueByDeadline  = $pStart->copy()->addDays($this->deadlineDays());
         $due            = $dueByPeriodEnd->lt($dueByDeadline) ? $dueByPeriodEnd : $dueByDeadline;

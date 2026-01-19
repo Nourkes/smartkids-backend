@@ -10,94 +10,11 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Cache;
 use Carbon\Carbon;
+use App\Services\ActiviteService;
 
 class ActiviteController extends Controller
 {
-
-
-public function calendar(Request $request): JsonResponse
-{
-    $year  = (int) $request->get('year', now()->year);
-    $month = (int) $request->get('month', now()->month);
-
-    $start = $request->filled('start')
-        ? Carbon::parse($request->get('start'))->startOfDay()
-        : Carbon::create($year, $month, 1)->startOfDay();
-
-    $end = $request->filled('end')
-        ? Carbon::parse($request->get('end'))->endOfDay()
-        : $start->copy()->endOfMonth()->endOfDay();
-
-    $cacheKey = "calendar_{$start->toDateString()}_{$end->toDateString()}_v2";
-
-    $payload = Cache::remember($cacheKey, 300, function () use ($start, $end) {
-
-        $rows = Activite::query()
-            ->whereBetween('date_activite', [$start->toDateString(), $end->toDateString()])
-            ->selectRaw('date_activite, COUNT(*) as total')
-            ->groupBy('date_activite')
-            ->orderBy('date_activite')
-            ->get();
-
-        $byType = Activite::query()
-            ->whereBetween('date_activite', [$start->toDateString(), $end->toDateString()])
-            ->selectRaw('date_activite, type, COUNT(*) as c')
-            ->groupBy('date_activite', 'type')
-            ->get()
-            ->groupBy('date_activite');
-
-        $events = Activite::query()
-            ->whereBetween('date_activite', [$start->toDateString(), $end->toDateString()])
-            ->orderBy('heure_debut')
-            ->get(['id','nom','type','date_activite','heure_debut','heure_fin','prix']);
-
-        $eventsByDate = [];
-        foreach ($events as $a) {
-            $k = Carbon::parse($a->date_activite)->toDateString();
-            $eventsByDate[$k][] = [
-                'id'    => $a->id,
-                'nom'   => $a->nom,
-                'type'  => $a->type,
-                'start' => $a->heure_debut,
-                'end'   => $a->heure_fin,
-                'prix'  => $a->prix,
-            ];
-        }
-
-        $days = [];
-        foreach ($rows as $r) {
-            $d = Carbon::parse($r->date_activite)->toDateString();
-
-            $typesMap = [];
-            if (isset($byType[$d])) {
-                foreach ($byType[$d] as $row) {
-                    $t = (string) ($row->type ?? 'autre');
-                    $typesMap[$t] = (int) $row->c;
-                }
-            }
-
-            $days[$d] = [
-                'total'   => (int) $r->total,
-                'by_type' => $typesMap,         // ex: {"musique":2,"sport":1}
-                'items'   => $eventsByDate[$d] ?? [],
-            ];
-        }
-
-        return [
-            'range' => [
-                'start' => $start->toDateString(),
-                'end'   => $end->toDateString(),
-                'days'  => $start->diffInDays($end) + 1,
-            ],
-            'days' => $days, // clé = 'YYYY-MM-DD'
-        ];
-    });
-
-    return response()->json(['success' => true, 'data' => $payload]);
-}
-
     /* ==================== LECTURE / LISTE / TYPES ==================== */
 
     public function types(): JsonResponse
@@ -110,19 +27,16 @@ public function calendar(Request $request): JsonResponse
         return response()->json([
             'success' => true,
             'message' => 'Types récupérés',
-            'data'    => Activite::TYPES, 
+            'data'    => Activite::TYPES, // garde ta constante telle quelle
         ]);
     }
 
-    public function typesPublic(): JsonResponse
-    {
-        $types = Activite::query()
-            ->whereNotNull('type')
-            ->select('type')->distinct()->orderBy('type')
-            ->pluck('type')->values();
-
-        return response()->json($types);
-    }
+    public function typesPublic(ActiviteService $service): JsonResponse
+{
+    return response()->json(
+        $service->typesPublic()
+    );
+}
 
     public function index(Request $request): JsonResponse
     {

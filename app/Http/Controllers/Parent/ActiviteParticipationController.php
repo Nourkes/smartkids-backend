@@ -16,7 +16,7 @@ class ActiviteParticipationController extends Controller
     public function participer(Request $request, Activite $activite)
     {
         $data = $request->validate([
-            'enfant_id'        => 'required|exists:enfants,id',
+            'enfant_id'        => 'required|exists:enfant,id',
             'remarques'        => 'nullable|string',
             'methode_paiement' => 'nullable|in:cash,carte,en_ligne',
         ]);
@@ -44,6 +44,7 @@ class ActiviteParticipationController extends Controller
         ], 201);
     }
 
+    // DELETE /api/parent/activites/{activite}/participations/{enfant}
     public function annuler(Request $request, Activite $activite, int $enfant)
     {
         $this->svc->desinscrire($activite, $enfant);

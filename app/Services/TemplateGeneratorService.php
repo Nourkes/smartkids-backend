@@ -32,7 +32,7 @@ class TemplateGeneratorService
         $loadMin    = $this->loadPublishedWeeklyMinutes($educators);
 
         // État “classe”
-        $classBusy = [];                 
+        $classBusy = [];                 // $classBusy[jour]["HH:MM-HH:MM"] = true
         $dayLoad   = array_fill(1, 6, 0);
 
         return DB::transaction(function () use (

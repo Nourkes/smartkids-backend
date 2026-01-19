@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\DB;
 
 class GradeController extends Controller
 {
+    // Roster + notes actuelles pour une classe/matière/semestre
     // GET /api/educateur/grades/roster?classe_id=..&matiere_id=..&term=1&year=2024–2025
     public function roster(Request $req)
     {
@@ -65,6 +66,13 @@ class GradeController extends Controller
         ]);
     }
 
+    // Upsert en lot
+    // POST /api/educateur/grades/bulk
+    // {
+    //   "classe_id": 3, "matiere_id": 5, "term":1, "year":"2024–2025",
+    //   "grades":[ {"enfant_id":10,"grade":"A"}, ... ],
+    //   "remarks":{"10":"Très bien", "12":"..."} // optionnel
+    // }
     public function bulkUpsert(Request $req)
     {
         $req->validate([

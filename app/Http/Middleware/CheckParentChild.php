@@ -9,11 +9,14 @@ use Symfony\Component\HttpFoundation\Response;
 
 class CheckParentChild
 {
-   
+    /**
+     * Handle an incoming request.
+     */
     public function handle(Request $request, Closure $next): Response
     {
         $user = $request->user();
         
+        // Vérifier que l'utilisateur existe et est un parent
         if (!$user || !$user->isParent()) {
             return response()->json([
                 'success' => false,
@@ -21,6 +24,7 @@ class CheckParentChild
             ], 403);
         }
 
+        // Récupérer le parent associé à l'utilisateur
         $parent = $user->parent;
         
         if (!$parent) {
@@ -34,6 +38,7 @@ class CheckParentChild
         if ($request->route('enfant')) {
             $enfantId = $request->route('enfant');
             
+            // CORRECTION : Spécifier explicitement la table pour éviter l'ambiguïté
             if (!$parent->enfants()->where('enfant.id', $enfantId)->exists()) {
                 return response()->json([
                     'success' => false,

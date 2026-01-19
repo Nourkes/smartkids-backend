@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 
 class ReportCardController extends Controller
 {
+    // GET /api/parent/enfants/{enfant}/report-card?semester=1&year=2024–2025
     public function show(Request $req, int $enfantId)
     {
         $req->validate([
@@ -32,6 +33,7 @@ class ReportCardController extends Controller
             $grades[$subject] = $g->grade;
         }
 
+        // remarque globale possible (prend la première non-vide)
         $remarks = optional($rows->firstWhere('remark', '!=', null))->remark;
 
         return response()->json([
@@ -39,7 +41,7 @@ class ReportCardController extends Controller
             'data' => [
                 'year'    => $year,
                 'term'    => $term,
-                'grades'  => $grades,  
+                'grades'  => $grades,  // { "Writing":"A", ... }
                 'remarks' => $remarks,
             ],
         ]);

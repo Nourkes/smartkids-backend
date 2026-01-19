@@ -303,6 +303,7 @@ class PresenceController extends Controller
 
     /**
      * PUT /api/educateur/presences/{presenceId}
+     * Modifier une présence individuelle
      */
     public function updatePresence(Request $request, $presenceId): JsonResponse
     {

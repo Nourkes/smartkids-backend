@@ -24,7 +24,7 @@ class EmploiQueryController extends Controller
                 'slots.matiere',
                 'slots.educateur.user',
                 'slots.salle',
-                'classe',           
+                'classe',            // si tu veux niveau/nom
             ])
             ->first();
 
@@ -32,6 +32,7 @@ class EmploiQueryController extends Controller
             return response()->json(['success' => true, 'data' => []]);
         }
 
+        // On "aplatit" les champs utiles pour le front
         $slots = $tpl->slots->sortBy(fn ($s) => sprintf('%d-%s', $s->jour_semaine, $s->debut))
             ->values()
             ->map(function ($s) use ($tpl) {
@@ -47,14 +48,17 @@ class EmploiQueryController extends Controller
                     'fin'                => $s->fin,
                     'matiere_id'         => (int) $s->matiere_id,
                     'educateur_id'       => (int) $s->educateur_id,
+                    // ⚠️ ne pas convertir 0 en null par erreur
                     'salle_id'           => is_null($s->salle_id) ? null : (int) $s->salle_id,
                     'status'             => $s->status,
 
+                    // libellés "friendly"
                     'matiere_nom'   => $s->matiere->nom ?? null,
                     'educateur_nom' => $user->name ?? ($educ->nom ?? null),
                     'salle_code'    => $salle->code ?? null,
                     'salle_nom'     => $salle->nom ?? null,
 
+                    // optionnels (si utiles côté app)
                     'classe_niveau' => $tpl->classe->niveau ?? null,
                     'classe_nom'    => $tpl->classe->nom ?? null,
 

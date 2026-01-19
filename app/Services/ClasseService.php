@@ -67,7 +67,9 @@ class ClasseService
             ->toArray();
     }
 
-  
+    /**
+     * Classes par statut (vides, partielles, complètes, surpeuplées)
+     */
     private function getClassesParStatut()
     {
         $classes = Classe::withCount('enfants')->get();
@@ -105,6 +107,7 @@ class ClasseService
             $date = now()->subMonths($i);
             $moisAnnee = $date->format('Y-m');
             
+            // Nombre d'enfants inscrits ce mois-là
             $enfantsInscrits = Enfant::whereNotNull('classe_id')
                 ->whereYear('created_at', $date->year)
                 ->whereMonth('created_at', $date->month)
@@ -224,7 +227,7 @@ class ClasseService
                 ];
             })
             ->filter(function($classe) {
-                return $classe['taux_occupation'] >= 90; 
+                return $classe['taux_occupation'] >= 90; // Classes à 90% ou plus
             })
             ->sortByDesc('taux_occupation')
             ->values();
@@ -262,6 +265,7 @@ class ClasseService
               ->orWhere('description', 'LIKE', "%{$terme}%");
         });
 
+        // Options de filtrage
         if (isset($options['niveau'])) {
             $query->where('niveau', $options['niveau']);
         }
@@ -280,6 +284,7 @@ class ClasseService
 
         $classes = $query->get();
 
+        // Filtres post-requête
         if (isset($options['taux_occupation_min']) || isset($options['taux_occupation_max'])) {
             $classes = $classes->filter(function($classe) use ($options) {
                 $tauxOccupation = $classe->capacite_max > 0 ? 
@@ -307,7 +312,7 @@ class ClasseService
             $classe->nombre_educateurs = $classe->educateurs->count();
             $classe->statut = $this->getStatutClasse($classe->taux_occupation);
             
-            unset($classe->enfants); 
+            unset($classe->enfants); // Nettoyer pour l'API
             return $classe;
         })->values();
     }
@@ -328,6 +333,7 @@ class ClasseService
             ->whereBetween('created_at', [$debut, $fin])
             ->count();
         
+        // Désinscriptions ce mois (si vous avez un soft delete ou un champ de fin)
         $desinscriptions = Enfant::onlyTrashed()
             ->whereBetween('deleted_at', [$debut, $fin])
             ->count();

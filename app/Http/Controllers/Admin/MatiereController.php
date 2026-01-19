@@ -15,8 +15,8 @@ class MatiereController extends Controller
             'photo' => 'required|image|max:4096', // jpg/png/webp <= 4 Mo
         ]);
 
-        $path = $r->file('photo')->store('matieres', 'public'); 
-        $url  = Storage::url($path); 
+        $path = $r->file('photo')->store('matieres', 'public'); // storage/app/public/matieres/...
+        $url  = Storage::url($path); // => /storage/matieres/xxx.jpg
 
         $matiere->update(['photo' => $url]);
 

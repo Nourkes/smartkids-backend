@@ -1,0 +1,13 @@
+@startuml
+actor Admin
+Admin --> (Gérer utilisateurs)
+Admin --> (Gérer inscriptions)
+Admin --> (Gérer classes)
+Admin --> (Gérer notes)
+Admin --> (Gérer paiements)
+Admin --> (Créer emploi temps)
+Admin --> (Gérer salles)
+Admin --> (Gérer menu)
+Admin --> (Envoyer notifications)
+Admin --> (Voir rapports)
+@enduml

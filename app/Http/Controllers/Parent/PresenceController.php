@@ -15,6 +15,7 @@ class PresenceController extends Controller
 {
     /**
      * GET /api/parent/enfants
+     * Récupérer les enfants du parent connecté
      */
    public function getEnfantsParent(): JsonResponse
 {
@@ -79,6 +80,7 @@ class PresenceController extends Controller
 
     /**
      * GET /api/parent/enfants/{enfantId}/presences
+     * Consulter les présences d'un enfant
      */
     public function getPresencesEnfant(Request $request, $enfantId): JsonResponse
     {
