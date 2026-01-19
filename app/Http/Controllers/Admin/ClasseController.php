@@ -149,7 +149,7 @@ class ClasseController extends Controller
     {
         try {
             $classe = Classe::with([
-                'educateurs.user:id,nom,prenom,email',
+                'educateurs.user:id,name,email',
                 'enfants:id,nom,prenom,date_naissance,classe_id',
                 'matieres:id,nom'
             ])->findOrFail($id);
@@ -461,7 +461,7 @@ public function update(Request $request, $id)
             $term = $request->term;
             $filters = $request->get('filters', []);
 
-            $query = Classe::with(['educateurs.user:id,nom,prenom', 'enfants:id,classe_id'])
+            $query = Classe::with(['educateurs.user:id,name', 'enfants:id,classe_id'])
                 ->where(function($q) use ($term) {
                     $q->where('nom', 'LIKE', "%{$term}%")
                       ->orWhere('niveau', 'LIKE', "%{$term}%")
@@ -616,7 +616,7 @@ public function update(Request $request, $id)
     {
         try {
             $classe = Classe::with([
-                'educateurs.user:id,nom,prenom,email,telephone',
+                'educateurs.user:id,name,email,telephone',
                 'enfants:id,nom,prenom,date_naissance,classe_id,allergies',
                 'matieres:id,nom,description'
             ])->findOrFail($id);
@@ -736,7 +736,8 @@ public function update(Request $request, $id)
     public function classesByNiveau($niveau)
     {
         try {
-            $classes = Classe::with(['educateurs.user:id,nom,prenom', 'enfants:id,classe_id'])
+
+            $classes = Classe::with(['educateurs.user:id,name', 'enfants:id,classe_id'])
                 ->where('niveau', $niveau)
                 ->orderBy('nom')
                 ->get();
@@ -854,7 +855,7 @@ public function update(Request $request, $id)
             $format = $request->get('format', 'json'); // json, csv, excel
 
             $classes = Classe::with([
-                'educateurs.user:id,nom,prenom,email',
+                'educateurs.user:id,name,email',
                 'enfants:id,nom,prenom,date_naissance,classe_id',
                 'matieres:id,nom'
             ])->get();

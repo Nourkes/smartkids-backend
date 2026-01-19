@@ -26,10 +26,9 @@ class ParentResource extends JsonResource
             'profession' => $this->profession,
             'telephone' => $this->telephone,
             'adresse' => $this->adresse,
-            'contact_urgence' => [
-                'nom' => $this->contact_urgence_nom,
-                'telephone' => $this->contact_urgence_telephone,
-            ],
+            'contact_urgence_nom' => $this->contact_urgence_nom,
+'contact_urgence_telephone' => $this->contact_urgence_telephone,
+
 
             // Enfants
             'enfants' => $this->whenLoaded('enfants', function () {

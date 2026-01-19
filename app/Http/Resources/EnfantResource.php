@@ -14,7 +14,8 @@ class EnfantResource extends JsonResource
      * @return array|\Illuminate\Contracts\Support\Arrayable|\JsonSerializable
      */
     public function toArray($request)
-{
+{        $parent = $this->parents->first();
+
     return [
         'id' => $this->id,
         'nom' => $this->nom,
@@ -28,6 +29,16 @@ class EnfantResource extends JsonResource
         'allergies' => $this->allergies,
         'remarques_medicales' => $this->remarques_medicales,
         'created_at' => $this->created_at,
+         // Classe
+            'classe' => $this->whenLoaded('classe'),
+
+            // Parents (résumé existant)
+            'parents' => ParentSummaryResource::collection($this->parents),
+
+
+            // ✅ AJOUTS ICI
+            'contact_urgence_nom' => $parent?->contact_urgence_nom,
+            'contact_urgence_telephone' => $parent?->contact_urgence_telephone,
     ];
 }
 

@@ -11,54 +11,19 @@ use Illuminate\Validation\ValidationException;
 class ActivitePaymentController extends Controller
 {
     /**
-     * GET /api/parent/activites/{activite}/payment/quote
-     * Renvoie le montant à afficher dans PaymentScreen.
+     * GET /api/parent/activites/{activite}/payment/quote?enfant_id=XX
      */
-public function quote(Request $request, Activite $activite)
-{
-    // 🔍 LOG CRITIQUE - Voir tout ce qui arrive
-    \Log::info('=== QUOTE REQUEST DEBUG ===', [
-        'activite_id' => $activite->id,
-        'query_all'   => $request->query(),
-        'enfant_id'   => $request->query('enfant_id'),
-        'full_url'    => $request->fullUrl(),
-        'method'      => $request->method(),
-        'headers'     => $request->headers->all(),
-    ]);
-
-    try {
-        $enfantId = $request->query('enfant_id');
-        
-        if (empty($enfantId)) {
-            \Log::warning('❌ enfant_id est vide', [
-                'query' => $request->query(),
-                'all'   => $request->all(),
-            ]);
-            
-            return response()->json([
-                'success' => false,
-                'message' => "L'ID de l'enfant est requis.",
-                'errors'  => [
-                    'enfant_id' => ["Le paramètre enfant_id est obligatoire."]
-                ],
-                'debug' => [
-                    'received_query' => $request->query(),
-                    'full_url' => $request->fullUrl(),
-                ]
-            ], 400);
-        }
-
-        $enfantId = (int) $enfantId;
-        
+    public function quote(Request $request, Activite $activite)
+    {
+        $enfantId = (int) $request->query('enfant_id', 0);
         if ($enfantId <= 0) {
             return response()->json([
                 'success' => false,
-                'message' => "L'ID de l'enfant est invalide.",
+                'message' => "Le paramètre enfant_id est obligatoire.",
             ], 400);
         }
 
         $montant = (float) ($activite->prix ?? 0);
-
         if ($montant <= 0) {
             return response()->json([
                 'success' => false,
@@ -66,12 +31,25 @@ public function quote(Request $request, Activite $activite)
             ], 400);
         }
 
-        \Log::info('✅ Quote généré avec succès', [
-            'activite_id' => $activite->id,
-            'enfant_id'   => $enfantId,
-            'montant'     => $montant,
-        ]);
+        // ✅ Si déjà inscrit + paiement déjà payé => bloquer
+        $participation = ParticipationActivite::where('activite_id', $activite->id)
+            ->where('enfant_id', $enfantId)
+            ->first();
 
+        if ($participation) {
+            $alreadyPaid = Paiement::where('participation_activite_id', $participation->id)
+                ->where('statut', 'paye')
+                ->exists();
+
+            if ($alreadyPaid) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "L'enfant est déjà inscrit à cette activité.",
+                ], 409);
+            }
+        }
+
+        // ✅ Sinon: OK -> quote normal
         return response()->json([
             'success'         => true,
             'message'         => 'Devis généré.',
@@ -81,26 +59,10 @@ public function quote(Request $request, Activite $activite)
             'pricing'         => ['mensuel' => $montant],
             'quote_details'   => ['montant_mensuel' => $montant],
         ], 200);
-
-    } catch (\Throwable $e) {
-        \Log::error('❌ Quote error', [
-            'error' => $e->getMessage(),
-            'trace' => $e->getTraceAsString(),
-        ]);
-
-        return response()->json([
-            'success' => false,
-            'message' => 'Erreur lors de la génération du devis.',
-        ], 500);
     }
-}
-
-
 
     /**
      * POST /api/parent/activites/{activite}/payment/confirm?enfant_id=XX
-     * Valide le paiement (crée la participation et/ou le paiement si besoin).
-     * Le PaymentScreen enverra body: { methode: 'en_ligne' }.
      */
     public function confirm(Request $request, Activite $activite)
     {
@@ -110,7 +72,6 @@ public function quote(Request $request, Activite $activite)
             'remarques' => 'nullable|string',
         ]);
 
-        // enfant_id est porté dans la query du confirmUrl (…/confirm?enfant_id=123)
         $enfantId = (int) $request->query('enfant_id', 0);
         if ($enfantId <= 0) {
             throw ValidationException::withMessages(['enfant_id' => 'enfant_id est requis.']);
@@ -119,13 +80,14 @@ public function quote(Request $request, Activite $activite)
         $parentId = optional($request->user()?->parent)->id;
 
         return DB::transaction(function () use ($activite, $enfantId, $parentId, $data) {
-            // 1) S’assurer qu’il existe une participation
+
+            // 1) récupérer / créer participation
             $participation = ParticipationActivite::where('activite_id', $activite->id)
                 ->where('enfant_id', $enfantId)
+                ->lockForUpdate()
                 ->first();
 
             if (! $participation) {
-                // auto-inscrire si pas encore inscrit
                 $activite->enfants()->attach($enfantId, [
                     'statut_participation' => 'inscrit',
                     'date_inscription'     => now(),
@@ -133,14 +95,36 @@ public function quote(Request $request, Activite $activite)
 
                 $participation = ParticipationActivite::where('activite_id', $activite->id)
                     ->where('enfant_id', $enfantId)
+                    ->lockForUpdate()
                     ->first();
+            }
+
+            if (! $participation) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Impossible de créer la participation.",
+                ], 500);
+            }
+
+            // ✅ 2) Si déjà payé => STOP (ne jamais recréer un paiement)
+            $alreadyPaid = Paiement::where('participation_activite_id', $participation->id)
+                ->where('statut', 'paye')
+                ->lockForUpdate()
+                ->exists();
+
+            if ($alreadyPaid) {
+                return response()->json([
+                    'success' => false,
+                    'message' => "Déjà inscrit(e) à cette activité.",
+                ], 409);
             }
 
             $montant = (float) ($activite->prix ?? 0);
 
-            // 2) Chercher un paiement en_attente sinon créer
+            // 3) paiement en attente existant ? sinon créer
             $paiement = Paiement::where('participation_activite_id', $participation->id)
                 ->where('statut', 'en_attente')
+                ->lockForUpdate()
                 ->first();
 
             if (! $paiement) {
@@ -157,7 +141,7 @@ public function quote(Request $request, Activite $activite)
                 ]);
             }
 
-            // 3) Valider le paiement
+            // 4) valider
             $paiement->update([
                 'statut'                => 'paye',
                 'date_paiement'         => now(),
@@ -169,7 +153,7 @@ public function quote(Request $request, Activite $activite)
                 'success'  => true,
                 'message'  => 'Paiement confirmé',
                 'paiement' => $paiement,
-            ]);
+            ], 200);
         });
     }
 }

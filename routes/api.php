@@ -144,6 +144,8 @@ Route::middleware('auth:sanctum')->group(function () {
         /* Classes (admin) */
         Route::get('/classes/stats', [ClasseController::class, 'stats']);
         Route::prefix('classes')->group(function () {
+            Route::get('/niveau/{niveau}', [ClasseController::class, 'classesByNiveau']);
+
             Route::get('/', [ClasseController::class, 'index']);
             Route::post('/', [ClasseController::class, 'store']);
             Route::get('/{id}', [ClasseController::class, 'show']);
@@ -157,7 +159,6 @@ Route::middleware('auth:sanctum')->group(function () {
             Route::post('/check-nom', [ClasseController::class, 'checkNomDisponibilite']);
             Route::get('/niveaux/disponibles', [ClasseController::class, 'niveauxDisponibles']);
             Route::get('/disponibles/affectation', [ClasseController::class, 'disponiblesAffectation']);
-            Route::get('/niveau/{niveau}', [ClasseController::class, 'classesByNiveau']);
             Route::post('/{id}/duplicate', [ClasseController::class, 'duplicate']);
             Route::get('/{id}/rapport', [ClasseController::class, 'rapport']);
             Route::post('/{id}/archiver', [ClasseController::class, 'archiver']);

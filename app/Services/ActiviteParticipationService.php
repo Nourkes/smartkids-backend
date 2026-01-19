@@ -8,7 +8,13 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class ActiviteParticipationService
+{public function dejaInscrit(Activite $activite, int $enfantId): bool
 {
+    return ParticipationActivite::where('activite_id', $activite->id)
+        ->where('enfant_id', $enfantId)
+        ->exists();
+}
+
     /**
      * Inscrire un enfant à une activité (et créer un paiement si prix > 0).
      * Ne modifie AUCUN de tes modèles existants.

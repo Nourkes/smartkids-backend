@@ -11,6 +11,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
+use App\Services\ActiviteService;
 
 class ActiviteController extends Controller
 {
@@ -30,15 +31,12 @@ class ActiviteController extends Controller
         ]);
     }
 
-    public function typesPublic(): JsonResponse
-    {
-        $types = Activite::query()
-            ->whereNotNull('type')
-            ->select('type')->distinct()->orderBy('type')
-            ->pluck('type')->values();
-
-        return response()->json($types);
-    }
+    public function typesPublic(ActiviteService $service): JsonResponse
+{
+    return response()->json(
+        $service->typesPublic()
+    );
+}
 
     public function index(Request $request): JsonResponse
     {

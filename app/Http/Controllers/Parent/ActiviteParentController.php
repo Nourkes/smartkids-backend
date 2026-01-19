@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 use Carbon\Carbon;
+use Illuminate\Support\Str;
 
 class ActiviteParentController extends Controller
 {
@@ -48,6 +49,39 @@ class ActiviteParentController extends Controller
         $activites = $q->orderBy('date_activite', 'asc')
             ->orderBy('heure_debut', 'asc')
             ->paginate($perPage);
+            $activites->getCollection()->transform(function ($a) {
+
+    // ✅ adapte si ton champ DB s'appelle autrement
+    $image = $a->image_url ?? $a->image ?? $a->photo ?? null;
+
+    if (!$image) {
+        $a->imageUrl = null;
+        return $a;
+    }
+
+    // Si déjà une URL externe
+    if (Str::startsWith($image, ['http://', 'https://'])) {
+        $a->imageUrl = $image; // (attention: Vecteezy peut 403)
+        return $a;
+    }
+
+    // Si déjà un chemin /storage/...
+    if (Str::startsWith($image, '/storage/')) {
+        $a->imageUrl = $image;
+        return $a;
+    }
+
+    // Si déjà "storage/..."
+    if (Str::startsWith($image, 'storage/')) {
+        $a->imageUrl = '/'.$image;
+        return $a;
+    }
+
+    // ✅ cas normal: "activites/meeting.png"
+    $a->imageUrl = '/storage/'.$image;
+    return $a;
+});
+
 
         return response()->json([
             'success' => true,
