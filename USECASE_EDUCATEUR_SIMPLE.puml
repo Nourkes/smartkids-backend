@@ -1,8 +1,0 @@
-@startuml
-actor Educateur
-Educateur --> (Saisir notes)
-Educateur --> (Gérer présences)
-Educateur --> (Gérer activités)
-Educateur --> (Consulter emploi)
-Educateur --> (Communiquer)
-@enduml
